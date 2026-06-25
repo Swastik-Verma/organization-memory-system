@@ -1,0 +1,23 @@
+# Secrets — NEVER commit this, it has your Gemini API key
+.env
+
+# Python virtual environment — huge, and machine-specific
+backend/venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# The raw dataset — ~500k files, way too large for GitHub (and not yours to redistribute)
+data/raw/
+
+# Processed output — also large, and it's derived/regenerable data, not source code
+data/processed/
+
+# OS-specific junk files
+.DS_Store
+Thumbs.db
+
+# IDE settings (optional — some people commit VS Code settings, but generally skip)
+.vscode/
