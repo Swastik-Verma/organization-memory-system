@@ -48,8 +48,10 @@ def batch_parse(raw_dir: Path, limit: int = None):
     successes: list[ParsedEmail] = []
     failures: list[dict] = []
 
-    for file_path in files:
-        print(f"Processing: {file_path}")
+    for i, file_path in enumerate(files, start=1):
+
+        if i % 1000 == 0:
+            print(f"{i} files processed so far...")
         try:
             raw_dict = parse_email_file(str(file_path))
             parsed = ParsedEmail(**raw_dict)
@@ -104,7 +106,7 @@ if __name__ == "__main__":
     raw_dir = Path(__file__).resolve().parent.parent.parent / "data" / "raw" / "maildir"
     processed_dir = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
 
-    successes, failures = batch_parse(raw_dir, limit=20)
+    successes, failures = batch_parse(raw_dir)#, limit=20)
 
     if successes:
-        save_to_jsonl(successes, processed_dir / "parsed_emails_test.jsonl")
+        save_to_jsonl(successes, processed_dir / "parsed_emails.jsonl")

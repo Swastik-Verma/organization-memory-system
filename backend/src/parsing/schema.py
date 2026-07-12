@@ -51,6 +51,15 @@ class ParsedEmail(BaseModel):
         if isinstance(value, datetime):
             return value
         try:
-            return parsedate_to_datetime(value)
+            parsed_date = parsedate_to_datetime(value)
         except (TypeError, ValueError):
             return None
+
+        # Enron's email archive realistically spans ~1998–2002.
+        # Dates outside a generous buffer window are almost certainly
+        # header typos/clock errors, not genuine data — treat them
+        # the same as an unparseable date.
+        if parsed_date.year < 1995 or parsed_date.year > 2005:
+            return None
+
+        return parsed_date
