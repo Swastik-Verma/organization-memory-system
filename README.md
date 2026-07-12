@@ -89,15 +89,15 @@ Gemini API · React/TypeScript · shadcn/ui · Docker Compose
 
 **Final Data Quality Report:**
 
-Total files attempted:     517,401
-Successfully parsed:       517,389
-Failed to parse:           12
-Success rate:              99.998%
-Unique message_ids:        517,389
-Duplicate records:         0
-Records with valid date:   516,854
-Records with null date:    535 (0.10%)
-Earliest email date:       1997-01-01
-Latest email date:         2005-12-29
+- Total files attempted:     517,401
+- Successfully parsed:       517,389
+- Failed to parse:           12
+- Success rate:              99.998%
+- Unique message_ids:        517,389
+- Duplicate records:         0
+- Records with valid date:   516,854
+- Records with null date:    535 (0.10%)
+- Earliest email date:       1997-01-01
+- Latest email date:         2005-12-29
 
 ---
