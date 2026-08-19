@@ -101,3 +101,57 @@ Gemini API · React/TypeScript · shadcn/ui · Docker Compose
 - Latest email date:         2005-12-29
 
 ---
+
+### Day 4 — LLM Extraction Pipeline (Complete)
+
+- Built full Gemini-based extraction pipeline: schema (`LLMExtractionOutput` 
+  + `ExtractionResult`), prompt engineering (v1 → v2, fixed 8 defects including 
+  hallucinated message_ids, weak relationship evidence, and incorrect `made_by` 
+  attribution), checkpointed batch extraction with automatic retry on temporary 
+  errors (429/503/network disconnects)
+- **Major deviation:** free-tier Gemini API rate limits turned out to be 20 
+  requests/day (not the 1,500 documented), making free-tier extraction of 
+  10,000 emails infeasible (~500 days). Pivoted to Google Cloud's $300 free 
+  trial credit via **Vertex AI** (a different API surface than AI Studio, 
+  since AI Studio usage is excluded from the credit)
+- **Final model:** `gemini-3.1-flash-lite` via Vertex AI (`location="global"`), 
+  `thinking_budget=0` to avoid billing for unused reasoning tokens
+- **Subset:** 10,000 emails drawn from 10 key Enron mailboxes (Kaminski, 
+  Dasovich, Kean, Mann, Jones, Beck, Nemec, Kitchen, Lay, Arnold), capped at 
+  1,500/person for balanced representation
+- **Result:** 10,000 / 10,000 emails successfully extracted
+- **Actual cost:** $[FILL IN FROM BILLING CHECK]
+- Extraction totals: [FILL IN FROM extraction_quality_report.py OUTPUT — 
+  e.g. total people/orgs/deals/decisions/relationships extracted]
+- **Known limitation carried to Week 4–5:** `affects` field on decisions is 
+  a free-text list mixing people, orgs, systems, and generic placeholders — 
+  must be resolved against `people`/`organizations` at graph-ingestion time, 
+  not at extraction time (see project context doc §9.1)
+
+- Extraction Quality Report of Day 4 is (it is not the full report, for full report run scritps/extraction_quality_report.py):
+```
+=======================================================
+EXTRACTION QUALITY REPORT
+=======================================================
+Total emails extracted:      10000
+
+Total people mentions:       98611
+Total organizations:         28723
+Total deals:                 4781
+Total decisions:             12331
+Total relationships:         7837
+
+Avg people/email:            9.86
+Avg decisions/email:         1.23
+Avg relationships/email:     0.78
+
+Decisions with made_by=null: 384 (3.1% of decisions)
+
+Relationship types breakdown:
+  works_with           3419
+  requests_from        2824
+  informs              867
+  reports_to           546
+  negotiating_with     181
+=======================================================
+```
