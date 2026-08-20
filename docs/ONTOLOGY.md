@@ -64,3 +64,18 @@ corrupting graph metrics.
 - **LLM-reported confidence scores**: rejected because the model returns
   ~0.9 for everything regardless of actual certainty. Confidence will be
   computed deterministically from verifiable signals at ingestion (Days 8-11)
+
+
+## Chunking
+
+Not implemented. Body length analysis of the 10k subset confirmed:
+- P99 = 12,229 chars (~3,057 tokens)
+- Max = 136,752 chars (~34,188 tokens) — only 2 emails
+- Gemini flash-lite context window exceeds 100k tokens
+
+All 10k emails were successfully extracted without chunking. Even the
+longest email (34k tokens) fits well within the model's context window.
+If the project scaled to a corpus with longer documents (e.g. full
+reports or legal filings), chunking would be needed — the thread
+reconstructor output provides the metadata (thread membership,
+chronological position) that a chunker would need.

@@ -59,6 +59,19 @@ def parse_email_file(file_path: str) -> dict:
     else:
         body = ""
 
+    # Thread headers
+    in_reply_to = msg.get("In-Reply-To")
+    references_raw = msg.get("References")
+    references = []
+    if references_raw:
+        # References header contains space-separated Message-IDs
+        references = references_raw.split()
+
+    # Display name headers
+    x_from_display = msg.get("X-From")
+    x_to_display = msg.get("X-To")
+    x_cc_display = msg.get("X-cc")
+
     return {
         "message_id": message_id,
         "from_addr": from_addr,
@@ -69,19 +82,9 @@ def parse_email_file(file_path: str) -> dict:
         "body": body,
         "x_folder": x_folder,
         "x_origin": x_origin,
+        "in_reply_to": in_reply_to,
+        "references": references,
+        "x_from_display": x_from_display,
+        "x_to_display": x_to_display,
+        "x_cc_display": x_cc_display,
     }
-
-
-# # --- Quick manual test when running this file directly ---
-# if __name__ == "__main__":
-#     import sys
-
-#     if len(sys.argv) < 2:
-#         print("Usage: python email_parser.py <path_to_email_file>")
-#         sys.exit(1)
-
-#     test_file = sys.argv[1]
-#     result = parse_email_file(test_file)
-
-#     for key, value in result.items():
-#         print(f"{key}: {value}\n")

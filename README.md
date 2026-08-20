@@ -166,3 +166,12 @@ Relationship types breakdown:
 - Documented all design decisions and rejected alternatives in `docs/ONTOLOGY.md`
 - Ran extraction quality inventory: 44k estimated nodes, 42k relationships — comfortable within 512MB Neo4j heap cap
 - Key findings from data inventory: org_type needs normalization (120+ variants → 6 categories), affects resolution rate is 91.3% (§9.1 problem smaller than expected), closed relationship vocabulary held perfectly
+
+
+### Day 6 — Noise Detection, Thread Reconstruction & Chunking Analysis
+- Re-parsed all 517,389 emails with new fields: in_reply_to, references, x_from_display, x_to_display, x_cc_display
+- Discovered In-Reply-To/References headers are absent from this packaged Enron dataset — fell back to subject-line threading
+- Built noise detector (`backend/src/parsing/noise_detector.py`) identifying quoted reply blocks, forwarding headers, and signature footers by character offset — used downstream to flag evidence extracted from non-original content
+- Built thread reconstructor (`backend/src/parsing/thread_reconstructor.py`) grouping emails by normalized subject line: 159,886 threads (84,760 multi-message, largest thread 1,124 messages)
+- Analyzed body length distribution: P99 = 3,057 tokens, max = 34,188 tokens — chunking confirmed unnecessary as all emails fit within Gemini flash-lite's context window
+- Regenerated extraction_subset.jsonl with new parsed fields

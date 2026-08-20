@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, field_validator
 from email.utils import parsedate_to_datetime
+from pydantic import BaseModel, Field, field_validator
 
 
 class ParsedEmail(BaseModel):
@@ -30,6 +31,16 @@ class ParsedEmail(BaseModel):
     body: str
     x_folder: str = ""
     x_origin: str = ""
+
+    # Thread linking headers
+    in_reply_to: Optional[str] = None          # Message-ID of the parent email
+    references: list[str] = Field(default_factory=list)  # chain of Message-IDs in the thread
+
+    # Display name headers (human-readable forms)
+    x_from_display: Optional[str] = None       # e.g. "Phillip K Allen"
+    x_to_display: Optional[str] = None         # e.g. "Tim Belden, Sally Beck"
+    x_cc_display: Optional[str] = None
+
 
     @field_validator("date", mode="before")
     @classmethod
