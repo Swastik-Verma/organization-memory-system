@@ -155,3 +155,14 @@ Relationship types breakdown:
   negotiating_with     181
 =======================================================
 ```
+
+### Day 5 — Graph Ontology & Neo4j Schema Design
+- Designed the knowledge graph ontology with reified claims (relationships stored as nodes, not direct edges) to support evidence trails, temporal validity windows, supersession links, and confidence scores
+- Defined 7 node types: Person, Organization, Deal, Decision, Claim, Evidence, Message
+- Chose deterministic ID strategy (slugified names for entities, SHA-256 hashes for claims/evidence) to enable idempotent graph rebuilds via MERGE
+- Defined temporal model: valid_from = email date (first observed), valid_to = null until contradicted; 535 null-date emails excluded from point-in-time queries but included in full-history queries
+- Created Pydantic models for all graph node types (`backend/src/graph/schema.py`)
+- Applied 7 uniqueness constraints and 13 indexes to Neo4j (`backend/scripts/init_graph_schema.py`)
+- Documented all design decisions and rejected alternatives in `docs/ONTOLOGY.md`
+- Ran extraction quality inventory: 44k estimated nodes, 42k relationships — comfortable within 512MB Neo4j heap cap
+- Key findings from data inventory: org_type needs normalization (120+ variants → 6 categories), affects resolution rate is 91.3% (§9.1 problem smaller than expected), closed relationship vocabulary held perfectly

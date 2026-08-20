@@ -21,7 +21,11 @@ def generate_report():
     total_deals = 0
     total_decisions = 0
     total_relationships = 0
+    affects_match_count = 0
+    affects_total_count = 0
+    empty_emails = 0
 
+    person_name_counter = Counter()
     decisions_null_made_by = 0
     relationships_by_type = Counter()
     org_types = Counter()
@@ -46,6 +50,30 @@ def generate_report():
 
             for o in record.get("organizations", []):
                 org_types[o.get("org_type") or "null"] += 1
+
+            
+            # Track emails with zero extractions
+            if (len(record.get("people", [])) == 0
+                and len(record.get("organizations", [])) == 0
+                and len(record.get("deals", [])) == 0
+                and len(record.get("decisions", [])) == 0
+                and len(record.get("relationships", [])) == 0):
+                empty_emails += 1
+
+            # Track person name frequency for dedup preview
+            for p in record.get("people", []):
+                if p.get("name"):
+                    person_name_counter[p["name"]] += 1
+
+            # Track affects resolution rate
+            people_names = {p.get("name", "").lower() for p in record.get("people", [])}
+            org_names = {o.get("name", "").lower() for o in record.get("organizations", [])}
+            all_names = people_names | org_names
+            for d in record.get("decisions", []):
+                for a in d.get("affects", []):
+                    affects_total_count += 1
+                    if a.lower() in all_names:
+                        affects_match_count += 1
 
     print("=" * 55)
     print("EXTRACTION QUALITY REPORT")
@@ -73,6 +101,28 @@ def generate_report():
     for otype, count in org_types.most_common():
         print(f"  {otype:20s} {count}")
     print("=" * 55)
+
+    print()
+    print(f"Empty emails (zero extractions): {empty_emails} "
+          f"({empty_emails/total_records*100:.1f}%)")
+    print()
+    print(f"Affects strings total:       {affects_total_count}")
+    print(f"Affects matching a name:     {affects_match_count} "
+          f"({affects_match_count/affects_total_count*100:.1f}%)" if affects_total_count else "")
+    print(f"Affects unresolvable:        {affects_total_count - affects_match_count}")
+    print()
+    print("Top 50 person names (dedup preview):")
+    for name, count in person_name_counter.most_common(50):
+        print(f"  {name:40s} {count}")
+    print()
+    print("--- Graph size estimate ---")
+    unique_people = len(person_name_counter)
+    unique_orgs = len(org_types)
+    print(f"Unique person name strings:  {unique_people}")
+    print(f"Unique org name strings:     {unique_orgs}")
+    print(f"Total nodes (rough):         ~{unique_people + unique_orgs + total_deals + total_decisions + total_records}")
+    print(f"Total relationships (rough): ~{total_relationships + total_decisions * 2 + total_records}")
+    print(f"512MB Neo4j heap:            {'comfortable' if (unique_people + unique_orgs) < 500000 else 'tight'}")
 
 
 if __name__ == "__main__":

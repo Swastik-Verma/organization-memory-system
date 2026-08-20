@@ -1,3 +1,5 @@
+# remember these files has to be deleted at the end
+
 # python3 -c "
 # from google import genai
 # import os
