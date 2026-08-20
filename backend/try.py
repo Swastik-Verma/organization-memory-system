@@ -1,17 +1,26 @@
 # remember these files has to be deleted at then end
 
 import json
-reply_count = 0
-ref_count = 0
+from src.parsing.noise_detector import detect_noise_regions
+
+with open('../data/processed/extraction_subset.jsonl') as f:
+    lines = f.readlines()
+
 total = 0
-with open('../data/processed/parsed_emails.jsonl') as f:
-    for line in f:
-        email = json.loads(line)
-        total += 1
-        if email.get('in_reply_to'):
-            reply_count += 1
-        if email.get('references') and len(email['references']) > 0:
-            ref_count += 1
-print(f'Total emails:              {total}')
-print(f'With In-Reply-To header:   {reply_count}')
-print(f'With References header:    {ref_count}')
+has_noise = 0
+noise_type_counts = {'quoted_reply': 0, 'forward_header': 0, 'signature': 0}
+
+for line in lines[:500]:  # check first 500 emails
+    email = json.loads(line)
+    regions = detect_noise_regions(email.get('body', ''))
+    total += 1
+    if regions:
+        has_noise += 1
+        for r in regions:
+            noise_type_counts[r.region_type] += 1
+
+print(f'Checked: {total} emails')
+print(f'With noise detected: {has_noise} ({has_noise/total*100:.1f}%)')
+print(f'Quoted replies found: {noise_type_counts["quoted_reply"]}')
+print(f'Forward headers found: {noise_type_counts["forward_header"]}')
+print(f'Signatures found: {noise_type_counts["signature"]}')

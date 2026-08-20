@@ -79,3 +79,39 @@ If the project scaled to a corpus with longer documents (e.g. full
 reports or legal filings), chunking would be needed — the thread
 reconstructor output provides the metadata (thread membership,
 chronological position) that a chunker would need.
+
+## Ingestion layer guarantees
+
+The ingestion layer (parsing → noise detection → thread reconstruction)
+makes these guarantees about its output:
+
+### ParsedEmail
+1. Every email has a non-empty `message_id`, `from_addr`, and `body`
+2. Dates are either valid datetimes within 1995-2005 or null — never
+   garbage values from clock errors
+3. All 517,389 parseable emails are captured; the 12 `kitchen-l` failures
+   are documented and accepted (0.002%)
+4. No duplicate `message_id` values exist in the parsed output
+
+### Noise detection
+5. Forwarding headers (`-----Original Message-----`) are detected with
+   character offsets
+6. Quoted reply blocks (`> ` lines and `wrote:` patterns) are detected
+7. Signatures are detected only in the bottom half of emails to avoid
+   false positives on section dividers
+8. The raw body is never modified — noise regions are annotations only
+9. `is_in_noise(start, end, regions)` returns true if any overlap exists
+
+### Thread reconstruction
+10. Threads are built from normalized subject lines (Re:/Fw:/Fwd: stripped)
+11. Emails with empty subjects are placed in standalone single-message threads
+12. Each thread is chronologically sorted by date
+13. This is approximate — unrelated emails sharing a subject will be
+    wrongly grouped. Header-based threading (In-Reply-To/References)
+    would be more precise but these headers are absent from this corpus
+
+### What is NOT guaranteed
+- Noise detection does not catch unmarked quoted text (pasted without
+  `>` markers or forwarding headers)
+- Thread grouping may merge unrelated conversations with identical subjects
+- The 535 null-date emails are included but excluded from date-sorted views

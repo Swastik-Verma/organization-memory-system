@@ -175,3 +175,12 @@ Relationship types breakdown:
 - Built thread reconstructor (`backend/src/parsing/thread_reconstructor.py`) grouping emails by normalized subject line: 159,886 threads (84,760 multi-message, largest thread 1,124 messages)
 - Analyzed body length distribution: P99 = 3,057 tokens, max = 34,188 tokens — chunking confirmed unnecessary as all emails fit within Gemini flash-lite's context window
 - Regenerated extraction_subset.jsonl with new parsed fields
+
+
+### Day 7 — Week 1 Review, Testing & Documentation
+- Ran full ingestion pipeline end-to-end: parse → subset selection → noise detection → thread reconstruction
+- Verified noise detector on 500 emails: confirmed detection of forwarding headers, quoted replies, and signatures
+- Manually reviewed 20 email outputs checking noise detection accuracy
+- Wrote unit tests for ParsedEmail schema, noise detector, and thread reconstructor subject normalization (tests/test_parsing.py)
+- Documented ingestion layer guarantees — what the pipeline promises about its output and what it does not
+- Week 1 complete: clean, structured, threaded email data ready for extraction pipeline improvements in Week 2
