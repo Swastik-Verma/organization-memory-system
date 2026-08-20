@@ -184,3 +184,14 @@ Relationship types breakdown:
 - Wrote unit tests for ParsedEmail schema, noise detector, and thread reconstructor subject normalization (tests/test_parsing.py)
 - Documented ingestion layer guarantees — what the pipeline promises about its output and what it does not
 - Week 1 complete: clean, structured, threaded email data ready for extraction pipeline improvements in Week 2
+
+
+### Day 8 — Evidence Verification & Offset Computation
+- Built evidence verifier: whitespace-normalized matching of LLM evidence quotes
+  against source email bodies
+- Computed character offsets (char_start/char_end) for verified quotes, enabling
+  frontend evidence highlighting
+- Verification rate: 96.1% (7,533/7,836 quotes verified)
+- 303 unverified quotes flagged for confidence penalty — not deleted
+- Added unit tests for graph schema models and evidence verifier
+- Output: `extractions_with_offsets.jsonl`, `evidence_verification_report.json`

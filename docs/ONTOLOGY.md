@@ -115,3 +115,34 @@ makes these guarantees about its output:
   `>` markers or forwarding headers)
 - Thread grouping may merge unrelated conversations with identical subjects
 - The 535 null-date emails are included but excluded from date-sorted views
+
+
+## Evidence Verification
+
+Every evidence quote extracted by the LLM is verified against the source email body
+before it enters the graph. Verification uses whitespace-normalized matching — all
+whitespace (newlines, tabs, multiple spaces) is collapsed to single spaces before
+comparison, because the Enron email bodies are hard-wrapped at ~76 characters and
+the LLM returns quotes without the artificial line breaks.
+
+Quotes that pass verification receive character offsets (`char_start`, `char_end`)
+pointing into the original (unmodified) email body. These offsets enable the frontend
+evidence panel to highlight the exact source text.
+
+Quotes that fail verification are flagged `evidence_verified: false` with null offsets.
+They are not deleted — the extraction is preserved as-is — but they receive a confidence
+penalty during scoring (Day 9) and are visually distinguished in the frontend.
+
+### Verification rate
+
+On the 10,000-email extraction subset: **96.1%** (7,533 of 7,836 total evidence quotes
+verified). The 3.9% unverified quotes are primarily cases where the LLM paraphrased
+slightly rather than quoting verbatim.
+
+### What verification does NOT do
+
+- It does not attempt fuzzy or approximate matching. A near-miss is still flagged as
+  unverified. This is deliberate — the verification rate is meant to honestly measure
+  extraction quality, not to be maximized.
+- It does not modify the extracted data. Raw extractions are immutable; verification
+  adds metadata alongside them.
