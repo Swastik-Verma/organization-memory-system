@@ -187,3 +187,28 @@ Every score includes a penalties audit trail listing exactly which deductions ap
 - Per-field: people 0.879, organizations 0.900, deals 0.900, decisions 0.900,
   relationships 0.942
 - 99.98% of items score above 0.7
+
+
+## Extraction Versioning
+
+Every extraction is stamped with two fields:
+- `prompt_version`: a 12-character SHA-256 hash of the extraction prompt text
+- `model_name`: the model used (e.g. "gemini-3.1-flash-lite")
+
+The prompt hash is deterministic — the same prompt always produces the same hash.
+Any change to the prompt text, however small, produces a different hash. This
+enables the version manager to identify stale extractions that need re-running
+after a prompt or ontology change, without re-extracting the entire corpus.
+
+### Repair-retry loop
+
+When the LLM returns structurally invalid output (malformed JSON or validation
+failures), the extractor sends the error message back to the model and asks for
+a structural fix. Up to 2 repair attempts are made before marking the extraction
+as permanently failed. Raw LLM responses are saved to `data/processed/raw_responses/`
+for post-hoc debugging.
+
+### Current version
+
+All 10,000 extractions in the working subset were produced by prompt v2 with
+`gemini-3.1-flash-lite` and retroactively stamped.

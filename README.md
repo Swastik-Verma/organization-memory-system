@@ -205,3 +205,13 @@ Relationship types breakdown:
   due to frequent missing email addresses
 - 99.98% of items above 0.7 soft threshold
 - Output: `extractions_scored.jsonl`, `confidence_report.json`
+
+### Day 10 — Extraction Versioning & Repair Loop
+- Built version manager: SHA-256 prompt hashing, stale extraction detection,
+  version reporting
+- Retroactively stamped all 10,000 extractions with prompt hash and model name
+- Added repair-retry loop to extractor: sends validation errors back to LLM
+  for structural fixes (up to 2 attempts)
+- Added raw LLM response storage for debugging
+- Output: `extractions_versioned.jsonl` (fully enriched with offsets, confidence,
+  and version stamps)

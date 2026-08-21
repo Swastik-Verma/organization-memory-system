@@ -71,3 +71,7 @@ class ExtractionResult(BaseModel):
     deals: list[ExtractedDeal] = Field(default_factory=list)
     decisions: list[ExtractedDecision] = Field(default_factory=list)
     relationships: list[ExtractedRelationship] = Field(default_factory=list)
+    
+    # Extraction versioning
+    prompt_version: str = ""       # hash of the prompt that produced this extraction
+    model_name: str = ""           # model used (e.g. "gemini-3.1-flash-lite")
