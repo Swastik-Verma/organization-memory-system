@@ -1,0 +1,27 @@
+{
+  "total_items": 152283,
+  "average_confidence": 0.8886,
+  "distribution": {
+    "0.0-0.3": 0,
+    "0.3-0.5": 0,
+    "0.5-0.7": 24,
+    "0.7-0.9": 42243,
+    "0.9-1.0": 110016
+  },
+  "per_field_averages": {
+    "people": 0.879,
+    "organizations": 0.9,
+    "deals": 0.9,
+    "decisions": 0.9,
+    "relationships": 0.9423
+  },
+  "penalty_counts": {
+    "no_evidence_available": 144446,
+    "no_email": 41413,
+    "in_noise_region": 2782,
+    "short_quote": 1223,
+    "unverified_evidence": 303,
+    "very_short_quote": 141,
+    "empty_evidence": 1
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "total_extractions": 10000,
+  "processing_time_seconds": 8.8,
+  "evidence_verification": {
+    "total_quotes": 7836,
+    "verified": 7533,
+    "rate_pct": 96.13
+  },
+  "confidence": {
+    "average": 0.8886
+  },
+  "quality_gate": {
+    "approved": 152255,
+    "review": 22,
+    "rejected": 6
+  },
+  "review_queue_size": 22,
+  "version": {
+    "prompt_hash": "84f6692170a8",
+    "model_name": "gemini-3.1-flash-lite"
+  }
+}

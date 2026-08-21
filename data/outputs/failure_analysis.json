@@ -1,0 +1,16 @@
+{
+  "unverified_categories": {
+    "likely_paraphrased": 60,
+    "whitespace_or_encoding": 242,
+    "very_short_and_unmatched": 1
+  },
+  "review_queue_penalties": {
+    "unverified_evidence": 22,
+    "short_quote": 22
+  },
+  "rejection_reasons": {
+    "hard_reject:self_referential": 4,
+    "hard_reject:unverifiable_and_too_short": 1,
+    "hard_reject:missing_evidence": 1
+  }
+}

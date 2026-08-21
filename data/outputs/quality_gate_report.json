@@ -1,0 +1,37 @@
+{
+  "thresholds": {
+    "soft": 0.7,
+    "hard": 0.3
+  },
+  "total_items": 152283,
+  "status_counts": {
+    "approved": 152255,
+    "review": 22,
+    "rejected": 6
+  },
+  "per_field": {
+    "people": {
+      "approved": 98611
+    },
+    "organizations": {
+      "approved": 28723
+    },
+    "deals": {
+      "approved": 4781
+    },
+    "decisions": {
+      "approved": 12331
+    },
+    "relationships": {
+      "approved": 7809,
+      "review": 22,
+      "rejected": 6
+    }
+  },
+  "rejection_reasons": {
+    "hard_reject:self_referential": 4,
+    "hard_reject:unverifiable_and_too_short": 1,
+    "hard_reject:missing_evidence": 1
+  },
+  "review_queue_size": 22
+}

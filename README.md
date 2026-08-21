@@ -245,3 +245,12 @@ Relationship types breakdown:
 - Automated failure analysis of 303 unverified quotes, 22 review items,
   and 6 rejected items
 - Output: `extraction_quality_report.json`, `failure_analysis.json`
+
+### Day 14 — Week 2 Review
+- Wrote formal extraction contract (docs/EXTRACTION_CONTRACT.md) defining
+  6 guarantees and 5 explicit non-guarantees
+- Exported example outputs to data/outputs/ for repo inclusion
+- Added unit tests for checkpoint module and prompt validation
+- Full test suite: [N] tests passing across 10 test files
+- Completed Week 2: extraction pipeline is fully tested, documented,
+  and ready for Week 3 deduplication

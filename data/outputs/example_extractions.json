@@ -1,0 +1,883 @@
+[
+  {
+    "message_id": "<31706685.1075848072252.JavaMail.evans@thyme>",
+    "people": [
+      {
+        "name": "Steven J Kean",
+        "email": "steven.kean@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Maureen McVicker",
+        "email": "mcvicker@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Sherri Reinartz",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Jeff",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      }
+    ],
+    "organizations": [
+      {
+        "name": "Enron",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "deals": [],
+    "decisions": [
+      {
+        "description": "Confirm attendance at the April 15-17 NAM board meeting",
+        "made_by": "Sherri Reinartz",
+        "affects": [
+          "Steven J Kean"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "description": "Forward NAM board meeting information to Steven J Kean",
+        "made_by": "Sherri Reinartz",
+        "affects": [
+          "Steven J Kean"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "relationships": [
+      {
+        "person_a": "Maureen McVicker",
+        "person_b": "Sherri Reinartz",
+        "relationship_type": "informs",
+        "evidence": "I let Sherri know that you are planning to go and that I have it on your calendar.",
+        "char_start": 261,
+        "char_end": 343,
+        "evidence_verified": true,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "in_noise_region",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "person_a": "Sherri Reinartz",
+        "person_b": "Steven J Kean",
+        "relationship_type": "requests_from",
+        "evidence": "Please confirm that you are attending in his place, and I'll forward the information he received today.",
+        "char_start": 522,
+        "char_end": 625,
+        "evidence_verified": true,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "in_noise_region",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "prompt_version": "84f6692170a8",
+    "model_name": "gemini-3.1-flash-lite"
+  },
+  {
+    "message_id": "<25543960.1075849845120.JavaMail.evans@thyme>",
+    "people": [
+      {
+        "name": "Patti Thompson",
+        "email": "patti.thompson@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Beth Apollo",
+        "email": "beth.apollo@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Brenda Herod",
+        "email": "brenda.herod@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Shona Wilson",
+        "email": "shona.wilson@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Sheri Thomas",
+        "email": "sheri.thomas@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Bob Hall",
+        "email": "bob.hall@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "James Scribner",
+        "email": "james.scribner@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Leslie Reeves",
+        "email": "leslie.reeves@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Jana Gionannini",
+        "email": null,
+        "role_or_title": "recruiting department",
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Sally",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      }
+    ],
+    "organizations": [
+      {
+        "name": "Enron",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "deals": [],
+    "decisions": [
+      {
+        "description": "Respond today with information regarding whether interns should have a finance or accounting background.",
+        "made_by": "Patti Thompson",
+        "affects": [
+          "Beth Apollo",
+          "Brenda Herod",
+          "Shona Wilson",
+          "Sheri Thomas",
+          "Bob Hall",
+          "James Scribner",
+          "Leslie Reeves"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "description": "Contact the recipients to request information regarding intern background preference.",
+        "made_by": "Sally",
+        "affects": [
+          "Patti Thompson"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "relationships": [
+      {
+        "person_a": "Sally",
+        "person_b": "Patti Thompson",
+        "relationship_type": "requests_from",
+        "evidence": "Sally asked me to contact you for this information.",
+        "char_start": 193,
+        "char_end": 244,
+        "evidence_verified": true,
+        "confidence": 1.0,
+        "confidence_penalties": [],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:1.0"
+      }
+    ],
+    "prompt_version": "84f6692170a8",
+    "model_name": "gemini-3.1-flash-lite"
+  },
+  {
+    "message_id": "<2828867.1075848072222.JavaMail.evans@thyme>",
+    "people": [
+      {
+        "name": "Steven Kean",
+        "email": "steven.kean@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Kenneth Lay",
+        "email": "kenneth.lay@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Sue Landwehr",
+        "email": null,
+        "role_or_title": "government affairs",
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Thompson",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      }
+    ],
+    "organizations": [
+      {
+        "name": "Enron",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Thompson administration",
+        "org_type": "government body",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Amtrak",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "ECT",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "deals": [
+      {
+        "name": "Amtrak electricity project",
+        "description": "ECT has been working with Amtrak on electricity",
+        "parties_involved": [
+          "ECT",
+          "Amtrak"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "decisions": [],
+    "relationships": [
+      {
+        "person_a": "Steven Kean",
+        "person_b": "Kenneth Lay",
+        "relationship_type": "informs",
+        "evidence": "the governor may be interested in talking to you about Amtrak",
+        "char_start": 104,
+        "char_end": 165,
+        "evidence_verified": true,
+        "confidence": 1.0,
+        "confidence_penalties": [],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:1.0"
+      }
+    ],
+    "prompt_version": "84f6692170a8",
+    "model_name": "gemini-3.1-flash-lite"
+  },
+  {
+    "message_id": "<31051656.1075855839025.JavaMail.evans@thyme>",
+    "people": [
+      {
+        "name": "Peggy Hedstrom",
+        "email": "peggy.hedstrom@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Sally Beck",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Mark Taylor",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Rob Milnthorp",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Donna Lowry",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Michael Neves",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Richard Lauer",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Rick L Carson",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "Ted Murphy",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      },
+      {
+        "name": "John Sorrells",
+        "email": null,
+        "role_or_title": null,
+        "confidence": 0.85,
+        "confidence_penalties": [
+          [
+            "no_email",
+            0.05
+          ],
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.85"
+      }
+    ],
+    "organizations": [
+      {
+        "name": "Enron",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "deals": [
+      {
+        "name": "Project DoorStep",
+        "description": "An audit observation initiative",
+        "parties_involved": [
+          "Donna Lowry",
+          "Rob Milnthorp"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "decisions": [
+      {
+        "description": "Provide action step implementation detail along with completion date and submit return response to Donna Lowry.",
+        "made_by": "Donna Lowry",
+        "affects": [
+          "Rob Milnthorp"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "description": "Provide me with an update on meeting with Mark Taylor.",
+        "made_by": "Peggy Hedstrom",
+        "affects": [
+          "Sally Beck"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "relationships": [
+      {
+        "person_a": "Peggy Hedstrom",
+        "person_b": "Sally Beck",
+        "relationship_type": "requests_from",
+        "evidence": "Have you had an opportunity to meet with Mark Taylor on this?  If so, can you provide me with an update?",
+        "char_start": 0,
+        "char_end": 104,
+        "evidence_verified": true,
+        "confidence": 1.0,
+        "confidence_penalties": [],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:1.0"
+      }
+    ],
+    "prompt_version": "84f6692170a8",
+    "model_name": "gemini-3.1-flash-lite"
+  },
+  {
+    "message_id": "<17254687.1075855823267.JavaMail.evans@thyme>",
+    "people": [
+      {
+        "name": "Robert Quick",
+        "email": "robert.quick@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      },
+      {
+        "name": "Michael Brown",
+        "email": "michael.brown@enron.com",
+        "role_or_title": null,
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "organizations": [
+      {
+        "name": "Enron",
+        "org_type": "company",
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "deals": [],
+    "decisions": [
+      {
+        "description": "Provide the second report with the password red",
+        "made_by": "Robert Quick",
+        "affects": [
+          "Michael Brown"
+        ],
+        "confidence": 0.9,
+        "confidence_penalties": [
+          [
+            "no_evidence_available",
+            0.1
+          ]
+        ],
+        "status": "approved",
+        "gate_reason": "confidence_above_soft_threshold:0.9"
+      }
+    ],
+    "relationships": [],
+    "prompt_version": "84f6692170a8",
+    "model_name": "gemini-3.1-flash-lite"
+  }
+]

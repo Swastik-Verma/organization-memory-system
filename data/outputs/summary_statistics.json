@@ -1,0 +1,33 @@
+{
+  "corpus": {
+    "total_emails_parsed": 517389,
+    "extraction_subset": 10000,
+    "mailboxes_selected": 10
+  },
+  "extraction": {
+    "model": "gemini-3.1-flash-lite",
+    "prompt_version": "v2",
+    "total_items_extracted": 152283,
+    "breakdown": {
+      "people": 98611,
+      "organizations": 28723,
+      "deals": 4781,
+      "decisions": 12331,
+      "relationships": 7837
+    }
+  },
+  "evidence_verification": {
+    "total_quotes": 7836,
+    "verified": 7533,
+    "rate_pct": 96.1
+  },
+  "confidence_scoring": {
+    "average": 0.889,
+    "median": 0.9
+  },
+  "quality_gate": {
+    "approved": 152255,
+    "review": 22,
+    "rejected": 6
+  }
+}
