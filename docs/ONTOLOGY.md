@@ -245,3 +245,41 @@ a graph edge at any confidence level.
 Gating adds a `status` and `gate_reason` field to each item. Rejected items
 remain in the data file and are excluded at graph load time, consistent with
 the soft-delete principle applied throughout the system.
+
+### Results (10,000-email subset)
+
+- Total items gated: 152,283
+- Approved: 152,255 (99.98%)
+- Review: 22 (0.01%) — all relationships with confidence in 0.3–0.7 range
+- Rejected: 6 (0.00%) — all from hard reject rules:
+  - 4 self-referential relationships (Person A works_with Person A)
+  - 1 unverifiable evidence and too short (< 20 chars)
+  - 1 missing evidence entirely
+- Zero rejections from confidence thresholds alone — all rejections were
+  structural problems the score would not have caught
+
+
+## Enrichment Pipeline
+
+All post-extraction enrichment runs as a single unified pipeline, ensuring
+consistent ordering and a single output file.
+
+### Pipeline steps (in order)
+
+1. **Evidence verification** — whitespace-normalized matching, character offsets
+2. **Confidence scoring** — field-aware deterministic penalties
+3. **Quality gating** — hard rejection rules + confidence thresholds
+4. **Version stamping** — prompt hash + model name
+
+### Output
+
+`extractions_final.jsonl` — the canonical enriched extraction file. Every item
+has offsets (or null), confidence with audit trail, gate status with reason, and
+version stamp. This is the input for Neo4j ingestion (Week 4).
+
+### Re-extraction
+
+When the prompt changes, `reextract_stale.py` identifies extractions produced by
+an older prompt version and re-processes only those through the LLM. The unified
+pipeline then re-enriches the new output. The full corpus never needs complete
+re-processing unless the ontology changes fundamentally.

@@ -226,3 +226,12 @@ Relationship types breakdown:
 - Generated review queue for items needing human judgment
 - Output: `extractions_gated.jsonl`, `review_queue.jsonl`,
   `quality_gate_report.json`
+
+
+### Day 12 — Unified Pipeline & Re-extraction Runner
+- Consolidated four enrichment scripts into a single unified pipeline
+  (verify → score → gate → stamp) producing one canonical output file
+- Built re-extraction runner for selective re-processing when prompt changes
+- Added pipeline integration tests verifying end-to-end enrichment
+- Output: `extractions_final.jsonl` (canonical enriched file),
+  `pipeline_report.json`
