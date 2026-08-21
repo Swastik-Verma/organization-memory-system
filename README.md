@@ -195,3 +195,13 @@ Relationship types breakdown:
 - 303 unverified quotes flagged for confidence penalty — not deleted
 - Added unit tests for graph schema models and evidence verifier
 - Output: `extractions_with_offsets.jsonl`, `evidence_verification_report.json`
+
+
+### Day 9 — Confidence Scoring
+- Built deterministic confidence scorer: field-aware penalties from verifiable
+  signals (evidence verification, quote length, noise regions, entity completeness)
+- Scored all 152,283 extracted items; average confidence 0.889, median 0.90
+- Relationships score highest (0.942) due to verified evidence; people lowest (0.879)
+  due to frequent missing email addresses
+- 99.98% of items above 0.7 soft threshold
+- Output: `extractions_scored.jsonl`, `confidence_report.json`

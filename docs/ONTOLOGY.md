@@ -146,3 +146,44 @@ slightly rather than quoting verbatim.
   extraction quality, not to be maximized.
 - It does not modify the extracted data. Raw extractions are immutable; verification
   adds metadata alongside them.
+
+
+## Confidence Scoring
+
+Confidence scores are computed deterministically from verifiable signals, not from
+LLM self-assessment. LLM-reported confidence clusters at 0.85-0.95 regardless of
+actual quality and provides no useful discrimination.
+
+### Scoring approach
+
+Each extracted item starts at 1.0 and receives penalties for weakness indicators.
+The scoring is **field-aware**: only relationship extractions (which carry verbatim
+evidence quotes) are evaluated on evidence quality. People, organizations, deals,
+and decisions receive a baseline uncertainty penalty (0.10) reflecting the inherent
+limitation of having no verifiable evidence.
+
+### Penalty signals
+
+For evidence-bearing fields (relationships):
+- Evidence not verified against source body: -0.30
+- Evidence empty: -0.50
+- Quote very short (< 20 chars): -0.15
+- Quote short (20-40 chars): -0.05
+- Evidence falls in a noise region (forwarded/quoted block): -0.10
+
+For all fields:
+- No evidence available (non-evidence fields): -0.10
+- Person has no email address: -0.05
+- Relationship missing source or target: -0.20
+- Floor: 0.05 (nothing scores zero)
+
+Every score includes a penalties audit trail listing exactly which deductions applied.
+
+### Distribution (10,000-email subset)
+
+- Total items scored: 152,283
+- Average confidence: 0.889
+- Median (P50): 0.90
+- Per-field: people 0.879, organizations 0.900, deals 0.900, decisions 0.900,
+  relationships 0.942
+- 99.98% of items score above 0.7
