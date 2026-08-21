@@ -313,3 +313,41 @@ source email text.
 - Unverified evidence (303 quotes): categorized as [your categories]
 - Review queue (22 items): all relationships with stacked confidence penalties
 - Rejected (6 items): 4 self-referential, 1 unverifiable+short, 1 missing evidence
+
+
+
+
+
+## Artifact Deduplication
+
+Duplicate emails are defined by **body content**, not by message metadata.
+Two emails with different Message-IDs, senders, recipients, or dates are
+duplicates if their bodies contain the same information.
+
+### Two-phase detection
+
+1. **Exact:** SHA-256 hash of whitespace-normalized, lowercased body.
+   Catches same-content emails filed in multiple mailbox folders.
+2. **Near-duplicate:** Cosine similarity ≥ 0.95 of sentence-transformer
+   embeddings (all-MiniLM-L6-v2) on noise-stripped original content.
+   Catches forwards and cross-posts with minor additions.
+
+### Primary selection
+
+Within each duplicate group, the primary email is selected by:
+earliest date → longest body → first message_id (tiebreaker).
+Only the primary is loaded into Neo4j; duplicates are skipped.
+
+### Results on 10k subset
+
+| Metric | Value |
+|---|---|
+| Exact duplicate groups | 833 |
+| Near-duplicate groups | 170 |
+| Total duplicates to skip | 1,405 |
+| Unique emails for ingestion | 8,595 |
+
+### Downstream contract
+
+`duplicate_ids.json` contains a flat list of message_ids to skip.
+During Neo4j ingestion: `if message_id in duplicate_ids: skip`.

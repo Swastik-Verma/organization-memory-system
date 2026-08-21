@@ -254,3 +254,24 @@ Relationship types breakdown:
 - Full test suite: [N] tests passing across 10 test files
 - Completed Week 2: extraction pipeline is fully tested, documented,
   and ready for Week 3 deduplication
+
+
+### Day 15 — Artifact Deduplication
+
+Built the artifact deduplication pipeline to detect exact and near-duplicate
+emails before graph ingestion.
+
+- **Exact duplicates** (SHA-256 of whitespace-normalized body): 833 groups,
+  907 duplicate emails. These are the same email appearing in multiple
+  mailbox folders (e.g. Sent + Discussion threads) with different Message-IDs
+  but identical content.
+- **Near-duplicates** (cosine similarity ≥ 0.95 via all-MiniLM-L6-v2):
+  170 groups, 498 duplicate emails. These are forwards and cross-posts
+  with minor additions ("FYI", different forwarding headers).
+- **Result:** 1,405 emails flagged as duplicates → 8,595 unique emails
+  will be loaded into Neo4j.
+- Duplicate IDs saved to `duplicate_ids.json` for O(1) lookup during ingestion.
+
+Note: Day 3 reported 0% duplicates because it checked `message_id` uniqueness
+(header-level). Day 15 checks body-level content, which correctly identifies
+the same content filed under different Message-IDs across mailbox folders.
