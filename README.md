@@ -215,3 +215,14 @@ Relationship types breakdown:
 - Added raw LLM response storage for debugging
 - Output: `extractions_versioned.jsonl` (fully enriched with offsets, confidence,
   and version stamps)
+
+
+### Day 11 — Quality Gates
+- Built three-tier quality gate: approved / review / rejected
+- Added structural hard-reject rules that bypass confidence scoring
+  (missing identity fields, invalid relationship types, self-referential
+  relationships, unverifiable short evidence)
+- Confidence thresholds: soft=0.70, hard=0.30
+- Generated review queue for items needing human judgment
+- Output: `extractions_gated.jsonl`, `review_queue.jsonl`,
+  `quality_gate_report.json`

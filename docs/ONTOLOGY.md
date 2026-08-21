@@ -212,3 +212,36 @@ for post-hoc debugging.
 
 All 10,000 extractions in the working subset were produced by prompt v2 with
 `gemini-3.1-flash-lite` and retroactively stamped.
+
+
+## Quality Gates
+
+Every scored item is routed into one of three outcomes before graph loading.
+
+### Hard rejection rules (score-independent)
+
+Structural problems that make an item unusable regardless of confidence:
+- Person, organization, or deal with no name
+- Decision with no description
+- Relationship missing source or target
+- Relationship where source equals target (self-referential)
+- Relationship type outside the closed vocabulary (reports_to, works_with,
+  requests_from, negotiating_with, informs)
+- Relationship with no evidence, or evidence that is both unverified and
+  under 20 characters
+
+These bypass the confidence score because they are binary problems, not
+matters of degree. A relationship with no target cannot be represented as
+a graph edge at any confidence level.
+
+### Confidence thresholds
+
+- confidence ≥ 0.70 → **approved** (loads into graph as current claim)
+- 0.30 ≤ confidence < 0.70 → **review** (human review queue)
+- confidence < 0.30 → **rejected** (not loaded)
+
+### Nothing is deleted
+
+Gating adds a `status` and `gate_reason` field to each item. Rejected items
+remain in the data file and are excluded at graph load time, consistent with
+the soft-delete principle applied throughout the system.
