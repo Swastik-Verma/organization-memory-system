@@ -235,3 +235,13 @@ Relationship types breakdown:
 - Added pipeline integration tests verifying end-to-end enrichment
 - Output: `extractions_final.jsonl` (canonical enriched file),
   `pipeline_report.json`
+
+
+
+### Day 13 — Extraction Quality Evaluation
+- Manually evaluated 50 random extractions against source emails
+- Overall accuracy: [X]%, hallucination rate: [Y]%
+- Top failure modes: [list your actual top 3]
+- Automated failure analysis of 303 unverified quotes, 22 review items,
+  and 6 rejected items
+- Output: `extraction_quality_report.json`, `failure_analysis.json`

@@ -283,3 +283,33 @@ When the prompt changes, `reextract_stale.py` identifies extractions produced by
 an older prompt version and re-processes only those through the LLM. The unified
 pipeline then re-enriches the new output. The full corpus never needs complete
 re-processing unless the ontology changes fundamentally.
+
+
+## Extraction Quality Evaluation
+
+### Manual accuracy assessment
+
+A random sample of 50 emails (seed=42) was manually reviewed, scoring each
+extracted item as correct, partially correct, or hallucinated against the
+source email text.
+
+[Fill in your actual numbers after running the evaluation]
+
+- Overall accuracy: [X]%
+- Hallucination rate: [Y]%
+- Per-field: people [A]%, organizations [B]%, deals [C]%, 
+  decisions [D]%, relationships [E]%
+
+### Top failure modes
+
+[Fill in your actual top 3 after review]
+
+1. [Failure mode 1]: [description and count]
+2. [Failure mode 2]: [description and count]
+3. [Failure mode 3]: [description and count]
+
+### Failure analysis
+
+- Unverified evidence (303 quotes): categorized as [your categories]
+- Review queue (22 items): all relationships with stacked confidence penalties
+- Rejected (6 items): 4 self-referential, 1 unverifiable+short, 1 missing evidence
