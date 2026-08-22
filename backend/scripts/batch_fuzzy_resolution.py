@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 def main():
     parser = argparse.ArgumentParser(description="Fuzzy entity resolution")
     parser.add_argument(
-        "--threshold", type=float, default=1.0,
+        "--threshold", type=float, default=0.85,
         help="Auto-merge confidence threshold (default: 0.85)",
     )
     parser.add_argument(

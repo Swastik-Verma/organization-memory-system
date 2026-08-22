@@ -312,7 +312,6 @@ Vince Kaminski across `vkamins@enron.com` / `vkamins@ect.enron.com`.
 Nicknames ("Ken" vs "Kenneth") also remain unmerged.
 
 
-
 ### Day 17 — Entity Resolution (Fuzzy Matching + Undo)
 
 Built the fuzzy entity matching pipeline on top of Day 16's exact matching.
@@ -323,12 +322,35 @@ Four strategies surface merge candidates that exact matching missed:
 3. **Same email domain** (490 candidates): same name + same @enron.com domain
 4. **General fuzzy matching** (1,803 candidates): catches typos via rapidfuzz
 
-All 2,503 candidates are routed to human review (no auto-merging).
-Decision: auto-merge disabled (threshold set to 1.0) to prevent false
-merges like "Jan Wilson" → "Jane Wilson" or "Carl Carter" → "Carol Carter"
-which could be genuinely different people. Human review queue built for
-Week 7 frontend (Day 44).
+Total: 2,503 unique candidates. Candidates ≥ 0.85 confidence are
+auto-merged; 0.70–0.85 saved for human review in Week 7; below 0.70
+skipped. All auto-merges are undoable via stored pre-merge snapshots.
 
 Built full undo capability: every merge operation stores pre-merge snapshots
 of both entities. Any merge can be reversed, restoring both entities to
 their exact prior state.
+
+
+### Day 18 — Claim Deduplication
+
+Collapsed 6,963 extracted relationships into 5,586 unique facts by
+resolving name variants to canonical IDs and merging duplicate mentions.
+
+**Three phases:**
+1. **Resolve and group:** All person names resolved via Days 16-17
+   resolution map. Symmetric types (works_with, negotiating_with)
+   normalized so "A works_with B" and "B works_with A" merge correctly.
+   Grouped by (subject_id, relationship_type, object_id).
+2. **Merge evidence:** Each group becomes one DedupedClaim with all
+   supporting evidence accumulated. Claim confidence = max across
+   evidence items. valid_from = earliest email date.
+3. **Detect conflicts:** Flags cases where the same person has multiple
+   different objects for reports_to (exclusive type). 27 genuine
+   conflicts detected for Day 19 classification.
+
+**Results:**
+- 6,963 relationships → 5,586 unique claims (1.25x compression)
+- 744 claims backed by multiple evidence items
+- Top claim: "Kay Mann requests_from Suzanne Adams" (17 supporting emails)
+- 27 reports_to conflicts flagged for Day 19
+- 0 unresolved person references

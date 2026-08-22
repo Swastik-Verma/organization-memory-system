@@ -448,13 +448,21 @@ nicknames, middle initials, typos, or email variants.
 | Same email domain | Same name, different @enron.com emails | 0.92 |
 | General fuzzy (rapidfuzz) | Typos: "Klauberg" ↔ "Klauber" | 0.81–0.99 |
 
-### Design decision: no auto-merging
+<!-- ### Design decision: no auto-merging
 
 All candidates routed to human review regardless of confidence. Rationale:
 fuzzy matching produces false positives ("Jan Wilson" ↔ "Jane Wilson",
 "Carl Carter" ↔ "Carol Carter") that are indistinguishable from true
 positives without human judgment. Candidates saved in
-`entity_resolution_fuzzy.json` for the Week 7 review queue UI.
+`entity_resolution_fuzzy.json` for the Week 7 review queue UI. -->
+
+### Merge confidence tiers
+
+| Confidence | Action |
+|---|---|
+| ≥ 0.85 | Auto-merge (undoable via snapshots) |
+| 0.70–0.85 | Saved for human review (Week 7 UI) |
+| < 0.70 | Skipped |
 
 ### Undo capability
 
@@ -473,3 +481,55 @@ This ensures no merge is permanent until confirmed by a human.
 | Total unique candidates | 2,503 |
 | Auto-merged | 0 (all to human review) |
 | Entities remaining | 23,020 (16,095 people + 6,925 orgs) |
+
+
+
+
+
+## Claim Deduplication (Day 18)
+
+### Dedup key
+
+Two relationships are the same fact if they share:
+  (canonical_subject_id, relationship_type, canonical_object_id)
+
+Name variants ("Steve Kean" vs "Steven Kean") resolve to the same
+canonical_id via the resolution map, so they correctly merge.
+
+### Symmetric normalization
+
+For works_with and negotiating_with, the subject/object pair is sorted
+alphabetically before building the dedup key. This ensures "A works_with B"
+and "B works_with A" collapse to one claim.
+
+### Evidence accumulation
+
+Multiple mentions of the same fact become one Claim node with multiple
+Evidence nodes. Claim confidence = max across all evidence items.
+valid_from = earliest supporting email date.
+
+### Conflict detection scope
+
+Only reports_to is treated as exclusive (one manager at a time).
+requests_from and informs are non-exclusive — multiple objects is
+normal behavior for these types, not a conflict.
+
+### Claim ID scheme
+
+claim_id = sha256(subject_id | type | object_id)[:16]
+
+Derived from the fact, not the mention. Same fact always produces
+the same ID regardless of how many emails state it. Makes Neo4j
+MERGE idempotent.
+
+### Results on 10k subset
+
+| Metric | Value |
+|---|---|
+| Input relationships | 6,963 |
+| Deduplicated claims | 5,586 |
+| Compression ratio | 1.25x |
+| Multi-evidence claims | 744 |
+| Max evidence per claim | 17 |
+| Genuine conflicts (reports_to) | 27 |
+| Unresolved references | 0 |

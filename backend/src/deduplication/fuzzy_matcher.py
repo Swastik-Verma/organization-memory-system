@@ -523,7 +523,7 @@ class FuzzyMatcher:
     # ------------------------------------------------------------------
 
     def apply_merges(
-        self, candidates: list[MergeCandidate], auto_threshold: float = 1.0
+        self, candidates: list[MergeCandidate], auto_threshold: float = 0.85
     ) -> int:
         """Apply merges for candidates above the confidence threshold.
 
