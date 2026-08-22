@@ -431,3 +431,45 @@ most frequent variant → longest → alphabetically first.
 `resolution_map.json` maps any name string → canonical_id.
 During Neo4j ingestion: look up every name in this map to get the
 canonical entity it belongs to, ensuring all aliases point to one node.
+
+
+
+## Entity Resolution — Fuzzy Matching (Day 17)
+
+Builds on Day 16's exact matching to find candidates that differ by
+nicknames, middle initials, typos, or email variants.
+
+### Four matching strategies
+
+| Strategy | What it catches | Confidence |
+|---|---|---|
+| Middle initial stripping | "Steven J Kean" ↔ "Steven Kean" | 0.82–0.88 |
+| Nickname expansion | "Ken Lay" ↔ "Kenneth Lay" | 0.85–0.90 |
+| Same email domain | Same name, different @enron.com emails | 0.92 |
+| General fuzzy (rapidfuzz) | Typos: "Klauberg" ↔ "Klauber" | 0.81–0.99 |
+
+### Design decision: no auto-merging
+
+All candidates routed to human review regardless of confidence. Rationale:
+fuzzy matching produces false positives ("Jan Wilson" ↔ "Jane Wilson",
+"Carl Carter" ↔ "Carol Carter") that are indistinguishable from true
+positives without human judgment. Candidates saved in
+`entity_resolution_fuzzy.json` for the Week 7 review queue UI.
+
+### Undo capability
+
+Every merge records pre-merge snapshots of both entities. Undo restores
+both entities and the resolution map to their exact pre-merge state.
+This ensures no merge is permanent until confirmed by a human.
+
+### Results on 10k subset
+
+| Metric | Value |
+|---|---|
+| Middle initial candidates | 743 |
+| Nickname candidates | 323 |
+| Same domain candidates | 490 |
+| Fuzzy candidates | 1,803 |
+| Total unique candidates | 2,503 |
+| Auto-merged | 0 (all to human review) |
+| Entities remaining | 23,020 (16,095 people + 6,925 orgs) |

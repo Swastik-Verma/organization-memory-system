@@ -310,3 +310,25 @@ Known remaining duplicates (Day 17 targets): "Kenneth Lay" split across
 two emails (`klay@enron.com` / `kenneth.lay@enron.com`), same for
 Vince Kaminski across `vkamins@enron.com` / `vkamins@ect.enron.com`.
 Nicknames ("Ken" vs "Kenneth") also remain unmerged.
+
+
+
+### Day 17 — Entity Resolution (Fuzzy Matching + Undo)
+
+Built the fuzzy entity matching pipeline on top of Day 16's exact matching.
+Four strategies surface merge candidates that exact matching missed:
+
+1. **Middle initial stripping** (743 candidates): "Steven J Kean" → "Steven Kean"
+2. **Nickname expansion** (323 candidates): "Ken Lay" → "Kenneth Lay"
+3. **Same email domain** (490 candidates): same name + same @enron.com domain
+4. **General fuzzy matching** (1,803 candidates): catches typos via rapidfuzz
+
+All 2,503 candidates are routed to human review (no auto-merging).
+Decision: auto-merge disabled (threshold set to 1.0) to prevent false
+merges like "Jan Wilson" → "Jane Wilson" or "Carl Carter" → "Carol Carter"
+which could be genuinely different people. Human review queue built for
+Week 7 frontend (Day 44).
+
+Built full undo capability: every merge operation stores pre-merge snapshots
+of both entities. Any merge can be reversed, restoring both entities to
+their exact prior state.
