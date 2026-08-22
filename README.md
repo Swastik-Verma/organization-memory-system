@@ -275,3 +275,38 @@ emails before graph ingestion.
 Note: Day 3 reported 0% duplicates because it checked `message_id` uniqueness
 (header-level). Day 15 checks body-level content, which correctly identifies
 the same content filed under different Message-IDs across mailbox folders.
+
+
+
+
+
+### Day 16 — Entity Resolution (Exact Matching)
+
+Built the entity resolution pipeline to collapse multiple name strings
+referring to the same person or organization into canonical entities.
+
+**Two resolution strategies (priority order):**
+1. **Email match** (people only): if two names share the same email address,
+   they are definitively the same person (confidence 1.0)
+2. **Normalized name match**: lowercase, strip titles, sort parts for people;
+   strip corporate suffixes for organizations (confidence 0.95)
+
+**Safeguards implemented:**
+- Names with same normalized form but different emails are kept separate
+  (genuinely different people who share a name)
+- Shared/generic email addresses (5+ distinct names) are excluded from
+  email-based resolution to prevent false merges
+- Multi-candidate name matching picks the highest-mention entity when
+  disambiguation is impossible
+
+**Results:**
+- 17,046 unique person names → 16,095 canonical people (951 collapsed)
+- 7,472 unique org names → 6,925 canonical organizations (547 collapsed)
+- 2,024 total merges: 1,262 by email, 762 by normalized name
+- 4 shared emails detected and excluded
+- Resolution map saved for downstream ingestion (24,252 name→id mappings)
+
+Known remaining duplicates (Day 17 targets): "Kenneth Lay" split across
+two emails (`klay@enron.com` / `kenneth.lay@enron.com`), same for
+Vince Kaminski across `vkamins@enron.com` / `vkamins@ect.enron.com`.
+Nicknames ("Ken" vs "Kenneth") also remain unmerged.

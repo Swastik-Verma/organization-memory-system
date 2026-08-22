@@ -351,3 +351,83 @@ Only the primary is loaded into Neo4j; duplicates are skipped.
 
 `duplicate_ids.json` contains a flat list of message_ids to skip.
 During Neo4j ingestion: `if message_id in duplicate_ids: skip`.
+
+
+
+## Entity Resolution — Exact Matching
+
+Collapses name variants to canonical entities using deterministic signals.
+Fuzzy matching (Day 17) builds on top of these results.
+
+### Resolution strategies (priority order)
+
+1. **Email match** — same email address = same person. Confidence 1.0.
+   Definitive because email addresses are unique identifiers.
+2. **Normalized name match** — names that normalize to the same form
+   are the same entity. Confidence 0.95.
+
+### Person name normalization
+
+Lowercase → remove commas/periods → strip titles (Mr., Dr., Jr., etc.)
+→ sort parts alphabetically. This handles "Last, First" vs "First Last"
+reordering and title variations.
+
+Does NOT catch: nicknames, middle initials without shared email, typos.
+
+### Organization name normalization
+
+Lowercase → remove punctuation → strip trailing corporate suffixes
+(Inc., Corp., LLC, Ltd., etc.). Word order is preserved (unlike person
+names) because it is semantically meaningful for organizations.
+
+### Conflicting email guard
+
+If two mentions share the same normalized name but have different email
+addresses, they are treated as separate entities. Rationale: email is
+a stronger identity signal than name. Same name + different email is
+more likely two different people than one person with two emails.
+
+Day 17 fuzzy matching resolves the cases where one person genuinely
+has multiple email addresses (e.g., Kenneth Lay with klay@enron.com
+and kenneth.lay@enron.com).
+
+### Shared email detection
+
+Email addresses with 5+ distinct normalized names are flagged as
+shared/generic mailboxes and excluded from email-based resolution.
+These entities are still resolved via name matching.
+
+### Canonical ID scheme
+
+| Scenario | ID format |
+|---|---|
+| Person with email | `person:{normalized-name}:{email-slug}` |
+| Person without email | `person:{normalized-name}` |
+| Organization | `org:{normalized-name}` |
+
+Email in the ID ensures uniqueness when two different people share a name.
+
+### Canonical name selection
+
+When multiple aliases exist, the canonical (display) name is selected by:
+most frequent variant → longest → alphabetically first.
+
+### Results on 10k subset
+
+| Metric | Value |
+|---|---|
+| Unique person names input | 17,046 |
+| Canonical people | 16,095 |
+| Person names collapsed | 951 |
+| Unique org names input | 7,472 |
+| Canonical organizations | 6,925 |
+| Org names collapsed | 547 |
+| Merges by email | 1,262 |
+| Merges by normalized name | 762 |
+| Shared emails detected | 4 |
+
+### Downstream contract
+
+`resolution_map.json` maps any name string → canonical_id.
+During Neo4j ingestion: look up every name in this map to get the
+canonical entity it belongs to, ensuring all aliases point to one node.
