@@ -533,3 +533,80 @@ MERGE idempotent.
 | Max evidence per claim | 17 |
 | Genuine conflicts (reports_to) | 27 |
 | Unresolved references | 0 |
+
+
+
+
+## Conflict Resolution (Day 19)
+
+### What counts as a conflict
+
+Only reports_to is classified as exclusive — a person has one manager
+at a time. Multiple objects for this type across different emails
+constitutes a conflict requiring resolution.
+
+requests_from, informs, works_with, negotiating_with are non-exclusive.
+Multiple objects for these types is normal behavior, not a conflict.
+
+### Classification (based on valid_from dates)
+
+All claims have valid_from = email date, valid_to = null (set here).
+Classification compares valid_from dates across conflicting claims:
+
+| Situation | Classification | Resolution |
+|---|---|---|
+| Different valid_from dates | temporal_succession | auto_resolved |
+| Same valid_from date | direct_contradiction | needs_review |
+| Any valid_from is null | undated | needs_review |
+
+### Temporal succession — auto-resolution
+
+When claims have different dates, the fact changed over time.
+The older claim gets valid_to closed at the newer claim's valid_from.
+
+Before:
+Claim A: valid_from=Jan, valid_to=null, status=current
+Claim B: valid_from=Jun, valid_to=null, status=current
+
+After:
+Claim A: valid_from=Jan, valid_to=Jun, status=superseded
+Claim B: valid_from=Jun, valid_to=null, status=current
+Edge: B -[:SUPERSEDES]-> A
+
+
+
+This enables temporal queries:
+  "Who does Kean report to NOW?" → WHERE valid_to IS NULL
+  "Who did Kean report to in Feb 2001?" → WHERE valid_from <= date < valid_to
+
+### Direct contradiction — human review
+
+When claims share the same date, temporal ordering is impossible.
+Both claims marked status="review" with bidirectional CONFLICTS_WITH edges.
+Resolved in Week 7 via the conflict review queue UI (Day 44).
+
+### Decision reversals
+
+Decisions containing reversal language ("cancelled", "no longer",
+"reversed", etc.) are flagged and saved to decision_reversals.json.
+
+Known limitation: pattern matching produces false positives
+(scheduling language like "instead of Sunday" triggers "instead of").
+Human review in Week 7 filters these. Semantic matching via embedding
+similarity would reduce false positives but was deferred — the volume
+of reversals (60) is small enough for manual review.
+
+Full semantic reversal linking (finding which original decision each
+reversal targets) is deferred to a future enhancement. The detection
+step is sufficient for surfacing the signal.
+
+### Results on 10k subset
+
+| Metric | Value |
+|---|---|
+| Conflicts input | 27 |
+| Temporal successions (auto-resolved) | 16 |
+| Direct contradictions (needs review) | 11 |
+| Claims with closed validity windows | 22 |
+| Decision reversals detected | 60 |
+| Canonical output file | resolved_claims.jsonl |

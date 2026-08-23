@@ -354,3 +354,30 @@ resolving name variants to canonical IDs and merging duplicate mentions.
 - Top claim: "Kay Mann requests_from Suzanne Adams" (17 supporting emails)
 - 27 reports_to conflicts flagged for Day 19
 - 0 unresolved person references
+
+
+
+### Day 19 — Conflict Resolution
+
+Classified and resolved the 27 reports_to conflicts detected in Day 18.
+
+**Classification logic (based on valid_from dates):**
+- Different dates → temporal succession (auto-resolve)
+- Same date → direct contradiction (human review)
+- Missing date → undated (human review)
+
+**Results:**
+- 16 temporal successions auto-resolved: older claim gets valid_to closed
+  at the newer claim's valid_from date, marked "superseded". A SUPERSEDES
+  edge connects them in the graph.
+- 11 direct contradictions flagged for human review. Both claims marked
+  "review" with bidirectional CONFLICTS_WITH edges.
+- 22 claims now have closed validity windows (valid_to set)
+- 60 decisions flagged as potential reversals via keyword patterns
+  (e.g. "cancelled", "no longer", "reversed")
+
+Notable finding: "Brent Price reports_to" shows a 4-step reporting chain
+change (Beck → Dyson → Causey → ENA Office of Chairman), demonstrating
+the temporal model capturing real Enron organizational evolution.
+
+Canonical output: resolved_claims.jsonl (supersedes deduplicated_claims.jsonl)
