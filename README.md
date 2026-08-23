@@ -381,3 +381,52 @@ change (Beck → Dyson → Causey → ENA Office of Chairman), demonstrating
 the temporal model capturing real Enron organizational evolution.
 
 Canonical output: resolved_claims.jsonl (supersedes deduplicated_claims.jsonl)
+
+
+
+
+### Day 20 — Soft Deletes and Redaction
+
+Built the RedactionManager library for safe, auditable data removal.
+Three operations with different severity levels:
+
+1. **Soft delete entity**: Flags entity + cascades to all connected claims
+   and evidence. Fully reversible via restore.
+2. **Soft delete claim**: Flags one claim + its evidence. Does not cascade
+   to entities (a person survives deletion of one fact about them).
+3. **Redact entity**: Replaces all content with [REDACTED], then soft-deletes.
+   Irreversible — for legal/privacy compliance where content must be
+   provably destroyed.
+
+Core principle: nothing is ever hard-deleted. Deleted items remain in the
+graph with is_deleted=True, excluded from queries but preserved for audit.
+Cascade tracking via deletion_reason prefix enables precise restore —
+only claims deleted because of a specific entity are restored with it.
+
+No batch script — this is a library called by the FastAPI API (Day 32)
+and the React frontend (Week 7) in response to user actions.
+
+
+
+### Day 21 — Week 3 Review
+
+Ran end-to-end verification of the full deduplication pipeline (Days 15-20).
+
+**Verification results:**
+- All output files present and correctly structured
+- Cross-stage data integrity verified (claim IDs unique, entity references
+  resolved, supersession chains consistent)
+- Soft delete round-trip tested (delete → verify hidden → restore → verify back)
+- 20 entity merges manually reviewed — all correct
+- 20 claim dedup decisions manually reviewed — all correct
+
+**Week 3 summary:**
+- 10,000 emails → 8,595 unique (Day 15: 1,405 duplicates removed)
+- 17,046 person names → 16,095 canonical people (Day 16: 951 collapsed)
+- 7,472 org names → 6,925 canonical organizations (Day 16: 547 collapsed)
+- 2,503 fuzzy merge candidates identified (Day 17: saved for Week 7 review)
+- 6,963 relationships → 5,586 unique claims (Day 18: 1.25x compression)
+- 27 conflicts → 16 auto-resolved, 11 for human review (Day 19)
+- Soft delete + redaction manager built with cascading and restore (Day 20)
+
+Data is ready for Week 4: Neo4j ingestion.

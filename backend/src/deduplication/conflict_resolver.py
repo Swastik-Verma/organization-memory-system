@@ -206,11 +206,12 @@ def classify_conflict(
             "temporal ordering",
         )
 
-    # Case 2: all dates are the same → contradiction
-    if len(set(dates)) == 1:
+    # Case 2: any duplicate dates → some claims can't be ordered
+    if len(set(dates)) < len(dates):
         return (
             "direct_contradiction",
-            "All claims have the same date — cannot determine which is current",
+            "Two or more claims share the same date — cannot fully "
+            "determine temporal ordering",
         )
 
     # Case 1: dates are different → temporal succession

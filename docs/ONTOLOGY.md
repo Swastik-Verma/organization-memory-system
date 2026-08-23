@@ -610,3 +610,93 @@ step is sufficient for surfacing the signal.
 | Claims with closed validity windows | 22 |
 | Decision reversals detected | 60 |
 | Canonical output file | resolved_claims.jsonl |
+
+
+
+
+
+## Soft Deletes and Redaction (Day 20)
+
+### Core principle
+
+Nothing is ever hard-deleted. All removals are flag-based:
+- is_deleted: true/false
+- deleted_at: ISO timestamp
+- deletion_reason: why and how it was deleted
+
+### Three operations
+
+| Operation | Reversible? | Content preserved? | Use case |
+|---|---|---|---|
+| soft_delete_entity | Yes | Yes | Bad data, operational cleanup |
+| soft_delete_claim | Yes | Yes | Individual bad extraction |
+| redact_entity | No | No (replaced with [REDACTED]) | GDPR, legal compliance |
+
+### Cascade rules
+
+- Entity deletion cascades to claims (via subject_id/object_id match)
+- Claim deletion does NOT cascade to entities
+- Cascade tracked via deletion_reason prefix:
+  `cascade:entity:{entity_id}:{reason}`
+- Restore matches this prefix to find and unflag cascaded items
+
+### Query patterns
+
+```cypher
+-- Normal retrieval (excludes deleted)
+WHERE is_deleted = false OR is_deleted IS NULL
+
+-- Audit view (only deleted)
+WHERE is_deleted = true
+```
+
+### Redaction vs soft delete
+
+Soft delete hides content from retrieval but preserves it for audit.
+Redaction replaces actual text with [REDACTED] — canonical_name, aliases,
+emails, evidence quotes all permanently overwritten. Restore is refused
+for redacted entities (content is unrecoverable by design).
+
+
+
+## Week 3 Deduplication — Pipeline Summary
+
+### Data flow
+
+extractions_final.jsonl (Day 14, 10k emails)
+↓
+artifact_dedup (Day 15) → 8,595 unique emails
+↓
+entity_resolution_exact (Day 16) → 16,095 people, 6,925 orgs
+↓
+entity_resolution_fuzzy (Day 17) → 2,503 candidates for review
+↓
+deduplicated_claims (Day 18) → 5,586 unique relationship claims
+↓
+resolved_claims (Day 19) → temporal chains + conflict flags
+↓
+redaction_manager (Day 20) → soft delete / redact / restore
+
+
+
+### Guarantees
+
+1. No duplicate emails are processed (Day 15 filter)
+2. Every person name maps to exactly one canonical entity (Days 16-17)
+3. Every relationship fact exists as exactly one claim with accumulated evidence (Day 18)
+4. Exclusive-type conflicts are detected and classified (Day 19)
+5. Temporal successions have closed validity windows (Day 19)
+6. Nothing is ever hard-deleted; all removals are auditable (Day 20)
+7. All merges are reversible via stored snapshots (Day 17)
+8. All deletions are reversible except redactions (Day 20)
+
+### Canonical files for Week 4 ingestion
+
+| File | Contains | Used by |
+|---|---|---|
+| resolution_map.json | name → canonical_id | Neo4j entity creation |
+| entity_resolution_fuzzy.json | canonical entities with aliases | Neo4j Person/Org nodes |
+| resolved_claims.jsonl | deduplicated + conflict-resolved claims | Neo4j Claim nodes |
+| duplicate_ids.json | message_ids to skip | Neo4j Message loading |
+| conflict_review_queue.json | contradictions for human review | Week 7 UI |
+| decision_reversals.json | flagged reversal decisions | Week 7 UI |
