@@ -700,3 +700,87 @@ redaction_manager (Day 20) → soft delete / redact / restore
 | duplicate_ids.json | message_ids to skip | Neo4j Message loading |
 | conflict_review_queue.json | contradictions for human review | Week 7 UI |
 | decision_reversals.json | flagged reversal decisions | Week 7 UI |
+
+
+
+
+## Week 4 — Memory Graph
+
+### Day 22 — Neo4j Schema (Revised)
+
+#### What changed from Day 5
+
+The Day 5 schema was a first draft written before extraction ran.
+After three weeks of working with real data, three things changed:
+
+1. **Person IDs** — now include email slug to handle two people with
+   the same name: `person:{normalized-name}:{email-slug}` e.g.
+   `person:kean-steven:steven-kean-at-enron-com`. Day 5 used
+   `person:{slugified-name}` which collided when names matched.
+
+2. **Claim IDs** — now fact-level, not mention-level.
+   `claim:{sha256(subject_id|claim_type|object_id)[:16]}`.
+   Five emails asserting the same relationship produce one Claim node
+   with five Evidence nodes, not five separate Claim nodes.
+
+3. **New Claim fields** — `supersedes`, `superseded_by`,
+   `conflicts_with[]` added from Day 19 temporal resolution.
+   `mention_count` tracks how many emails stated this fact.
+
+#### Node types (7)
+
+| Label | Source file | Primary key |
+|---|---|---|
+| Person | entity_resolution_fuzzy.json | id |
+| Organization | entity_resolution_fuzzy.json | id |
+| Claim | resolved_claims.jsonl | id |
+| Evidence | resolved_claims.jsonl (embedded) | id |
+| Message | extraction_subset.jsonl | message_id |
+| Deal | extractions_final.jsonl | id |
+| Decision | extractions_final.jsonl | id |
+
+#### Edge types (14)
+
+| Edge | From → To | Meaning |
+|---|---|---|
+| SUBJECT | Claim → Person | Subject of this claim |
+| OBJECT | Claim → Person/Org | Object of this claim |
+| SUPPORTED_BY | Claim → Evidence | Quote that proves this claim |
+| FROM_MESSAGE | Evidence → Message | Email the quote came from |
+| SENT_BY | Message → Person | Email sender |
+| SENT_TO | Message → Person | Email recipient |
+| MADE_BY | Decision → Person | Who made this decision |
+| AFFECTS | Decision → Person/Org | Who this decision affects |
+| PARTY | Deal → Person/Org | Party to this deal |
+| SUPERSEDES | Claim → Claim | Newer claim replacing older |
+| CONFLICTS_WITH | Claim → Claim | Unresolved contradiction |
+| MERGED_INTO | Person/Org → Person/Org | Entity merge record |
+
+#### Why reified claims (not direct edges)
+
+A direct edge `(:Person)-[:REPORTS_TO]->(:Person)` cannot be the
+endpoint of another relationship in Neo4j. This means there is
+nowhere to attach evidence, validity windows, or supersession links.
+
+By making the relationship a node (`:Claim`), every fact has full
+provenance: who stated it, in which email, with what confidence, and
+for what time period. The tradeoff is slightly more complex queries
+(traversing through the Claim node), which is worth it for the
+evidence trail.
+
+#### Constraints and indexes applied
+
+7 uniqueness constraints (one per node type) + 20 indexes.
+
+Key indexes for temporal queries:
+- `idx_claim_valid_from`, `idx_claim_valid_to` — point-in-time queries
+- `idx_claim_superseded_by` — "what's current?" (WHERE superseded_by IS NULL)
+- `idx_claim_status` — filter by current/superseded/review/archived
+- `idx_claim_is_deleted` — exclude soft-deleted content
+
+#### org_type normalization
+
+120+ free-text org_type variants from extraction mapped to 6 categories
+at ingestion time: company, government, nonprofit, university,
+internal_division, other. Unknown values default to "other" rather
+than crashing. Mapping is in `src/graph/schema.py → ORG_TYPE_MAP`.

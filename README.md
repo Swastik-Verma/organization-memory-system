@@ -430,3 +430,23 @@ Ran end-to-end verification of the full deduplication pipeline (Days 15-20).
 - Soft delete + redaction manager built with cascading and restore (Day 20)
 
 Data is ready for Week 4: Neo4j ingestion.
+
+
+
+### Day 22 — Neo4j Schema (Revised)
+
+Revised the Neo4j graph schema from Day 5 to match three weeks of
+data evolution. Updated Pydantic models in `src/graph/schema.py`
+to reflect the new Person ID format (includes email slug to handle
+same-name collisions), the new fact-level Claim ID scheme from Day 18,
+and the temporal fields added in Day 19 (`supersedes`, `superseded_by`,
+`conflicts_with`). Added `normalize_org_type()` to map 120+ free-text
+org_type variants to 6 clean categories.
+
+Ran `init_graph_schema.py --drop-existing` to replace the Day 5
+schema: dropped 7 old constraints and 13 old indexes, created 7 new
+constraints and 20 new indexes. Graph is now empty and ready for the
+loader in Day 23.
+
+Graph size estimate after loading: ~50k nodes, ~100k edges —
+comfortably within the 512MB Neo4j heap cap.
