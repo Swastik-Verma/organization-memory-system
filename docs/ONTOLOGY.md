@@ -969,3 +969,140 @@ the exact words in the original email works correctly.
 - **Cross-entity queries**: "Which organizations did Enron deal with
   in 2001?" requires joins across multiple entity types — no method
   for this yet. Will be added in Week 5 as chatbot reveals gaps.
+
+
+
+
+### Day 25 — Incremental Update System
+
+#### What was built
+
+Three production-readiness features implemented in
+`src/graph/incremental_updater.py`:
+
+1. **Incremental update** (`run_incremental_update`) — loads new email
+   batches into the existing graph without reprocessing old data
+2. **Confidence decay** (`apply_confidence_decay`) — ages out stale
+   claims that haven't received fresh evidence
+3. **Ontology drift detection** (`detect_ontology_drift`,
+   `detect_graph_drift`) — monitors for schema violations in
+   extraction output and the loaded graph
+
+#### Why these features exist
+
+These features make the system production-ready for a real organization
+where emails arrive continuously. For the Enron portfolio project, the
+data is historical (corpus ends ~late 2001) so these features are built
+but not actively applied — running decay on a frozen corpus would
+archive valid claims with no way to replenish them with fresh evidence.
+The code exists to demonstrate the production architecture and is fully
+explainable in interviews.
+
+#### Incremental update — how it works
+
+New emails go through the same pipeline as the original batch:
+
+New raw emails
+→ parse (batch_parse_emails.py)
+→ LLM extraction (batch_extract.py)
+→ enrich (run_enrichment_pipeline.py)
+→ entity resolution (batch_entity_resolution.py)
+→ claim dedup + conflict resolution (batch_claim_dedup.py)
+→ load into graph (run_incremental_update)
+
+
+
+The `run_incremental_update` method is the last step. It assumes
+extraction and enrichment have already run on the new batch. MERGE
+ensures idempotency — reprocessing an email that already exists
+updates it rather than creating a duplicate.
+
+After loading, `_detect_new_conflicts` checks whether any new claim
+contradicts an existing current claim (same subject, same exclusive
+type, different object). Conflicts are reported, not auto-resolved.
+Resolution happens either automatically (temporal succession from
+Day 19 logic, for claims with different dates) or via the human
+review queue (Day 44 frontend, for same-date contradictions).
+
+#### Confidence decay — formula and constants
+
+reference_date = "2002-01-01" (end of meaningful Enron data)
+decay_rate = 10% per year
+archive_threshold = 0.30
+minimum_age = 365 days (claims under 1 year old not decayed)
+
+years_old = days_between(last_evidence_date, reference_date) / 365
+decay = years_old × decay_rate
+new_confidence = original_confidence - decay
+if new_confidence < archive_threshold → status = 'archived'
+
+
+**Why reference_date = 2002-01-01:** Using today's date (2026) would
+make every claim ~25 years old and archive the entire graph. The
+corpus reference date simulates "it is January 2002 — which claims
+have gone stale?"
+
+**Reversal:** `reset_confidence_decay()` removes the decay flag and
+restores archived claims to `status = 'current'`. It does NOT restore
+the original confidence value — for that, re-run the graph loader
+from `resolved_claims.jsonl` (MERGE overwrites decayed values with
+originals from the immutable source file).
+
+**`preview_confidence_decay()`** is a dry-run method — reads the
+graph and shows what would happen without writing anything. Safe to
+run at any time.
+
+#### Ontology drift detection — what it checks
+
+**From extraction files (`detect_ontology_drift`):**
+- Relationship types outside the 5-type closed vocabulary
+- Org types that normalize to "other" (signals ORG_TYPE_MAP needs expanding)
+- Structural issues: missing person_a/person_b, self-referential relationships
+- Empty extractions (zero entities/relationships extracted)
+
+**From the loaded graph (`detect_graph_drift`):**
+- Claim type distribution (shows if unknown types accumulated)
+- Org type distribution (shows normalization gaps)
+- Claims without evidence
+- Claims without SUBJECT edge
+
+**What happens when drift is detected:**
+
+Drift detection is a monitoring tool, not a blocker. Three responses:
+
+| Situation | Response |
+|---|---|
+| LLM produces types outside schema | Fix extraction prompt, re-extract |
+| New type is genuinely useful | Add to ClaimType enum, prompt, VALID_CLAIM_TYPES, re-extract |
+| Unknown type appeared 1-2 times | Log it, treat as noise, ignore |
+
+The system never crashes or silently drops data on drift. It reports
+and a human decides.
+
+#### Deployment model (production)
+
+In a real deployment these would run on a schedule:
+
+Nightly (2 AM):
+
+1. Fetch new emails from last 24 hours
+2. Run full extraction pipeline on new emails
+3. detect_ontology_drift → alert if drift detected
+4. run_incremental_update → load new data
+5. apply_confidence_decay → age out stale claims
+
+Weekly:
+6. detect_graph_drift → health dashboard update
+
+
+
+For the Enron portfolio project: the code is built and tested.
+Active scheduling is not implemented since the corpus is historical.
+
+#### Files
+
+| File | Purpose |
+|---|---|
+| `src/graph/incremental_updater.py` | All three features |
+| `scripts/run_incremental_update.py` | Demonstration runner |
+| `tests/test_incremental_updater.py` | Unit tests |

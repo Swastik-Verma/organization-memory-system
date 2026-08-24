@@ -516,3 +516,46 @@ correctly shows the supersession chain Causey → Price → Kitchen
 with validity windows. Evidence trail works end-to-end from claim
 to quote to source email. Graph statistics confirmed:
 15,003 persons, 5,586 claims (5,538 current, 15 superseded, 33 review).
+
+
+
+### Day 25 — Incremental Update System
+
+Built three production-readiness features in
+`src/graph/incremental_updater.py`:
+
+**1. Incremental updates (`run_incremental_update`)**
+Loads new email batches into the existing graph without touching old
+data. MERGE makes it idempotent — reprocessing an existing email
+updates rather than duplicates. After loading, automatically detects
+conflicts between new and existing claims.
+
+**2. Confidence decay (`apply_confidence_decay`)**
+Ages out stale claims using a time-based formula: 10% confidence
+lost per year without fresh supporting evidence. Claims that drop
+below 0.30 confidence are archived rather than deleted. Reversible
+via `reset_confidence_decay()` or by re-running the graph loader.
+A dry-run preview mode (`preview_confidence_decay`) shows affected
+claims before committing changes.
+
+**3. Ontology drift detection (`detect_ontology_drift`,
+`detect_graph_drift`)**
+Monitors for schema violations — relationship types outside the
+5-type closed vocabulary, org types that don't map to the 6
+categories, structural issues (self-referential relationships,
+missing endpoints). Reports findings without blocking. Human decides
+whether to fix the prompt, expand the ontology, or ignore noise.
+
+**Note on portfolio project usage:**
+The Enron corpus is historical (ends ~late 2001). These features
+are built and tested but not actively applied — running decay on
+a frozen corpus would archive valid claims with no new emails to
+replenish confidence. The code demonstrates the production
+architecture for the organizational memory system and is fully
+explainable in technical interviews.
+
+**How the full incremental pipeline would work in production:**
+
+New emails → parse → LLM extract → enrich → entity resolve
+→ claim dedup → conflict resolve → run_incremental_update (load)
+→ apply_confidence_decay (schedule) → detect_graph_drift (health)
