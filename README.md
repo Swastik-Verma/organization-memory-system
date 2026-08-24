@@ -491,3 +491,28 @@ MATCH (c)-[:OBJECT]->(boss:Person)
 RETURN boss.canonical_name, c.valid_from, c.valid_to, c.status
 ORDER BY c.valid_from
 ```
+
+
+### Day 24 — Temporal Query Engine
+
+Built the query layer (`src/graph/temporal_queries.py`) that sits
+between the chatbot and Neo4j. All graph queries go through this
+module — the chatbot never writes raw Cypher.
+
+**Three core temporal access patterns:**
+- `get_current_state()` — what is true right now (`valid_to IS NULL`)
+- `get_state_at(date)` — what was true at a specific date
+- `get_full_history()` — complete chronological record
+
+**13 methods total** covering entity lookup, evidence retrieval,
+decisions, deals, conflict queries, and graph statistics.
+
+**Four concerns handled automatically on every query:**
+temporal filtering, soft-delete exclusion, entity resolution by
+partial name, and clean result formatting.
+
+**Verified against real data.** Sally Beck's full reporting history
+correctly shows the supersession chain Causey → Price → Kitchen
+with validity windows. Evidence trail works end-to-end from claim
+to quote to source email. Graph statistics confirmed:
+15,003 persons, 5,586 claims (5,538 current, 15 superseded, 33 review).

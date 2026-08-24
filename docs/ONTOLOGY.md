@@ -883,3 +883,89 @@ wasn't in the resolution map.
 Senders whose email addresses don't appear in the entity set — mostly
 external correspondents who appear in emails but weren't mentioned in
 extraction output.
+
+
+
+### Day 24 — Temporal Query Engine
+
+#### What it is
+
+A Python module (`src/graph/temporal_queries.py`) that sits between
+the chatbot (Week 5) and Neo4j. All graph queries go through this
+layer — the chatbot never writes raw Cypher.
+
+#### The three core temporal access patterns
+
+Every claim has `valid_from` and `valid_to` dates. These three
+patterns exploit that structure:
+
+**Current state** (`get_current_state`)
+Returns claims where `valid_to IS NULL AND status = 'current'`.
+Answers: "Who does Kean report to right now?"
+
+**Historical state** (`get_state_at`)
+Returns claims where `valid_from <= date AND (valid_to IS NULL OR
+valid_to > date)`. Claims with `valid_from = null` are excluded —
+undated claims cannot be placed on a timeline.
+Answers: "Who did Kean report to in March 2001?"
+
+**Full history** (`get_full_history`)
+Returns all claims regardless of status, ordered chronologically.
+Null-dated claims sorted last.
+Answers: "Show me Kean's complete reporting history."
+
+#### All 13 methods and what they cover
+
+| Method | Question type |
+|---|---|
+| `find_entity(name)` | Find canonical ID from partial name |
+| `get_entity_profile(id)` | Basic entity details |
+| `get_current_state(id)` | What's true right now |
+| `get_state_at(id, date)` | What was true on a date |
+| `get_full_history(id)` | Complete chronological record |
+| `get_evidence_for_claim(id)` | Proof for a specific claim |
+| `get_full_email(message_id)` | Full email for evidence panel |
+| `get_relationships_about(id)` | Claims where entity is subject |
+| `get_relationships_involving(id)` | Claims in either direction |
+| `get_decisions_by(id)` | Decisions this person made |
+| `get_decisions_affecting(id)` | Decisions affecting this entity |
+| `get_deals_involving(id)` | Deals this entity is party to |
+| `get_conflicts(id)` | Unresolved contradictions |
+| `get_graph_stats()` | Summary counts for health dashboard |
+
+#### Four concerns the engine handles for every query
+
+Every method automatically applies all four — the chatbot never
+thinks about them:
+
+1. **Temporal logic** — valid_from/valid_to filtering per access pattern
+2. **Deletion filtering** — `WHERE is_deleted = false` on every node
+3. **Entity resolution** — `find_entity()` searches canonical names
+   AND aliases, returns sorted by mention_count
+4. **Result formatting** — returns clean Python dicts, not raw
+   Neo4j Record objects
+
+#### Verified against real data
+
+Sally Beck reporting history confirmed correct:
+
+× reports_to Richard Causey: 2000-01-17 to 2000-08-16 (superseded, 12 evidence)
+× reports_to Brent Price: 2000-08-16 to 2000-11-08 (superseded, 1 evidence)
+→ reports_to Louise Kitchen: 2000-11-08 to present (current, 1 evidence)
+
+
+Evidence trail verified end-to-end:
+Claim → Evidence quote (with char offsets) → Source email (subject,
+sender, date, full body). The full chain from a graph fact back to
+the exact words in the original email works correctly.
+
+#### What the engine does NOT handle (yet)
+
+- **Permission filtering** (Day 26): access level checks not yet
+  applied. All users see all content.
+- **Reverse direction queries**: `get_current_state()` only returns
+  claims where the entity is the SUBJECT. "Who reports TO Kean?" 
+  requires `get_relationships_involving()` or a dedicated method.
+- **Cross-entity queries**: "Which organizations did Enron deal with
+  in 2001?" requires joins across multiple entity types — no method
+  for this yet. Will be added in Week 5 as chatbot reveals gaps.
