@@ -136,14 +136,20 @@ def drop_all_constraints_and_indexes(session):
 
 
 def delete_all_data(session):
-    """Delete all nodes and relationships. Use CALL IN TRANSACTIONS for large graphs."""
-    # For our scale (~50k nodes max), a simple DELETE is fine.
-    # For larger graphs, use CALL { ... } IN TRANSACTIONS OF 10000 ROWS
-    result = session.run(
-        "MATCH (n) DETACH DELETE n RETURN count(n) AS deleted"
-    )
-    count = result.single()["deleted"]
-    print(f"  Deleted {count} nodes (and all their relationships)")
+    """Delete all nodes and relationships in batches to stay within memory limits."""
+    total_deleted = 0
+    while True:
+        result = session.run("""
+            MATCH (n)
+            WITH n LIMIT 1000
+            DETACH DELETE n
+            RETURN count(n) AS deleted
+        """)
+        deleted = result.single()["deleted"]
+        total_deleted += deleted
+        if deleted == 0:
+            break
+    print(f"  Deleted {total_deleted} nodes (and all their relationships)")
 
 
 def create_constraints(session):

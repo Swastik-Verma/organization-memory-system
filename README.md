@@ -450,3 +450,44 @@ loader in Day 23.
 
 Graph size estimate after loading: ~50k nodes, ~100k edges —
 comfortably within the 512MB Neo4j heap cap.
+
+
+
+
+### Day 23 — Graph Loader
+
+Built the graph loader (`src/graph/loader.py`) that reads all four
+Week 2-3 data files and loads them into Neo4j using idempotent MERGE
+operations. Loading completes in ~35 seconds.
+
+**What was loaded:**
+- 56,062 nodes across 7 types (Person, Organization, Message, Deal,
+  Decision, Claim, Evidence)
+- 121,589 edges across 11 types
+
+**Key design decisions:**
+- MERGE throughout — re-running produces identical results, no
+  duplicates created
+- UNWIND batching (500 items per transaction) — eliminates per-node
+  network overhead
+- Duplicate email filtering applied to Deal and Decision loading —
+  reduced decisions from 12,331 raw to 10,780 clean
+- Resolution at load time — `affects`, `made_by`, `parties_involved`
+  resolved via `resolution_map.json`; unresolved strings stored as
+  text properties (`affects_unresolved`, `parties_unresolved`),
+  never as phantom nodes
+- Evidence IDs and Deal IDs generated deterministically at load time
+  (sha256-based) since these have no pre-existing IDs in the pipeline
+
+**Graph is now queryable at http://localhost:7474**
+
+Example query — full reporting history for a person:
+```cypher
+MATCH (p:Person)
+WHERE p.canonical_name CONTAINS "Kean"
+WITH p
+MATCH (c:Claim {claim_type: "reports_to"})-[:SUBJECT]->(p)
+MATCH (c)-[:OBJECT]->(boss:Person)
+RETURN boss.canonical_name, c.valid_from, c.valid_to, c.status
+ORDER BY c.valid_from
+```

@@ -1,26 +1,30 @@
 # remember these files has to be deleted at then end
 
+
+
 import json
-from src.parsing.noise_detector import detect_noise_regions
+res_map = json.loads(open('../data/processed/resolution_map.json').read())
+dup_ids = set(json.loads(open('../data/processed/duplicate_ids.json').read()))
 
-with open('../data/processed/extraction_subset.jsonl') as f:
-    lines = f.readlines()
-
+null_made_by = 0
+unresolvable = 0
 total = 0
-has_noise = 0
-noise_type_counts = {'quoted_reply': 0, 'forward_header': 0, 'signature': 0}
-
-for line in lines[:500]:  # check first 500 emails
-    email = json.loads(line)
-    regions = detect_noise_regions(email.get('body', ''))
-    total += 1
-    if regions:
-        has_noise += 1
-        for r in regions:
-            noise_type_counts[r.region_type] += 1
-
-print(f'Checked: {total} emails')
-print(f'With noise detected: {has_noise} ({has_noise/total*100:.1f}%)')
-print(f'Quoted replies found: {noise_type_counts["quoted_reply"]}')
-print(f'Forward headers found: {noise_type_counts["forward_header"]}')
-print(f'Signatures found: {noise_type_counts["signature"]}')
+with open('../data/processed/extractions_final.jsonl') as f:
+    for line in f:
+        ext = json.loads(line)
+        if ext['message_id'] in dup_ids:
+            continue
+        for dec in ext.get('decisions', []):
+            desc = dec.get('description','').strip()
+            if not desc:
+                continue
+            total += 1
+            mb = dec.get('made_by')
+            if not mb or not mb.strip():
+                null_made_by += 1
+            elif mb.strip() not in res_map:
+                unresolvable += 1
+print(f'Total decisions: {total}')
+print(f'Null made_by: {null_made_by}')
+print(f'Unresolvable made_by: {unresolvable}')
+print(f'Should have MADE_BY edge: {total - null_made_by - unresolvable}')

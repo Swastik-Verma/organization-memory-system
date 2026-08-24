@@ -784,3 +784,102 @@ Key indexes for temporal queries:
 at ingestion time: company, government, nonprofit, university,
 internal_division, other. Unknown values default to "other" rather
 than crashing. Mapping is in `src/graph/schema.py → ORG_TYPE_MAP`.
+
+
+
+### Day 23 — Graph Loader
+
+#### Source files → Node types mapping
+
+| Source file | Node type | Count loaded |
+|---|---|---|
+| entity_resolution_fuzzy.json | Person | 15,003 |
+| entity_resolution_fuzzy.json | Organization | 6,726 |
+| extraction_subset.jsonl (minus duplicates) | Message | 8,595 |
+| extractions_final.jsonl (non-duplicate emails only) | Deal | 3,303 |
+| extractions_final.jsonl (non-duplicate emails only) | Decision | 10,780 |
+| resolved_claims.jsonl | Claim | 5,586 |
+| resolved_claims.jsonl (embedded evidence lists) | Evidence | 6,069 |
+| **Total** | | **56,062 nodes** |
+
+#### Edge types loaded and their counts
+
+| Edge | From → To | Count | Notes |
+|---|---|---|---|
+| SENT_TO | Message → Person | 47,174 | One message can have many recipients |
+| AFFECTS | Decision → Person/Org | 22,818 | Resolved via resolution_map |
+| MADE_BY | Decision → Person | 10,249 | 264 decisions had null/unresolvable made_by |
+| PARTY | Deal → Person/Org | 9,126 | Resolved via resolution_map |
+| SENT_BY | Message → Person | 8,072 | ~6% senders unresolvable (external people) |
+| SUPPORTED_BY | Claim → Evidence | 6,962 | One per evidence item |
+| FROM_MESSAGE | Evidence → Message | 6,069 | 100% match rate |
+| OBJECT | Claim → Person | 5,564 | 22 claims reference org as object |
+| SUBJECT | Claim → Person | 5,490 | 96 claims reference org as subject |
+| CONFLICTS_WITH | Claim → Claim | 50 | Bidirectional, 25 unique conflict pairs |
+| SUPERSEDES | Claim → Claim | 15 | Temporal succession chains |
+| **Total** | | **121,589 edges** | |
+
+#### Loading design decisions
+
+**MERGE not CREATE everywhere**
+Every node and edge write uses `MERGE` (find-or-create). Running the
+loader twice produces the same graph as running it once. This is
+essential because the graph is derived data that gets rebuilt when
+pipeline rules change.
+
+**UNWIND $batch pattern**
+Items are sent to Neo4j in batches of 500 via `UNWIND $batch AS row`.
+This reduces network round-trips from 56,000 individual calls to ~112
+batch calls. Loading completes in ~35 seconds.
+
+**Dependency ordering**
+Nodes are loaded before edges. Entities (Person, Organization) are
+loaded before Claims, because Claims reference entity IDs. If entities
+don't exist when edges are created, the MATCH fails silently and the
+edge is skipped — no dangling references are created.
+
+**Duplicate email filtering**
+`extractions_final.jsonl` contains extractions for all 10,000 emails
+including the 1,405 duplicates identified in Day 15. The loader skips
+any extraction whose `message_id` is in `duplicate_ids.json`. This
+reduced Decisions from the raw 12,331 to 10,780 and Deals from 4,781
+to 3,303.
+
+**Resolution at load time**
+`affects`, `made_by`, and `parties_involved` strings are resolved
+against `resolution_map.json` during loading. Resolved strings become
+edges. Unresolved strings are stored as text properties
+(`affects_unresolved`, `parties_unresolved`) on the node — never
+as phantom nodes. This is the Day 4 §9.1 design finally applied.
+
+**Evidence ID generation**
+Evidence items in `resolved_claims.jsonl` have no pre-existing ID.
+IDs are generated at load time: `evidence:{sha256(message_id+quote)[:16]}`.
+Same quote from the same email always produces the same ID, so MERGE
+deduplicates evidence shared across multiple claims — 6,963 evidence
+items collapsed to 6,069 unique Evidence nodes.
+
+**Deal ID generation**
+Deals have no pre-existing ID. IDs are generated from the slugified
+deal name: `deal:{slugify(name)}`. Same deal name across multiple
+emails produces the same ID, so MERGE deduplicates automatically.
+
+#### Known gaps (not bugs)
+
+**96 SUBJECT edges and 22 OBJECT edges missing**
+Some claims have an organization as their subject or object (e.g.
+"Enron informs Kenneth Lay"). The SUBJECT/OBJECT Cypher only matches
+`:Person` nodes. These claims have no SUBJECT/OBJECT edge. Fix: extend
+the Cypher to also match `:Organization` nodes. Deferred — all current
+claims in practice have persons on both sides; org-as-subject is an
+edge case from the LLM extraction.
+
+**264 decisions with no MADE_BY edge**
+Either `made_by` is null in the extraction (384 known from Day 4,
+proportionally fewer after duplicate filtering) or the name string
+wasn't in the resolution map.
+
+**~6% of messages have no SENT_BY edge**
+Senders whose email addresses don't appear in the entity set — mostly
+external correspondents who appear in emails but weren't mentioned in
+extraction output.
