@@ -22,6 +22,7 @@ httpx==0.28.1
 huggingface_hub==1.19.0
 hyperframe==6.1.0
 idna==3.18
+iniconfig==2.3.0
 Jinja2==3.1.6
 joblib==1.5.3
 markdown-it-py==4.2.0
@@ -33,6 +34,7 @@ neo4j==6.2.0
 networkx==3.6.1
 numpy==2.4.6
 packaging==26.2
+pluggy==1.6.0
 portalocker==3.2.0
 protobuf==7.35.1
 pyasn1==0.6.3
@@ -41,10 +43,12 @@ pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
 Pygments==2.20.0
+pytest==9.1.1
 python-dotenv==1.2.2
 pytz==2026.2
 PyYAML==6.0.3
 qdrant-client==1.18.0
+RapidFuzz==3.14.5
 regex==2026.5.9
 requests==2.34.2
 rich==15.0.0

@@ -560,7 +560,8 @@ class GraphLoader:
         evidence_cypher = """
         UNWIND $batch AS row
         MERGE (e:Evidence {id: row.id})
-        SET e.quote = row.quote,
+        SET e.evidence_id = row.id,
+            e.quote = row.quote,
             e.char_start = row.char_start,
             e.char_end = row.char_end,
             e.evidence_verified = row.evidence_verified,

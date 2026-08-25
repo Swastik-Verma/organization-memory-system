@@ -1449,3 +1449,54 @@ full entity→claim→evidence→email chain confirmed working.
 | 26 | Permission layer — 4 access levels | Complete |
 | 27 | Health monitoring — 7 metric categories | Complete |
 | 28 | Week 4 review — 82/83 checks passed | Complete |
+
+
+## Week 5 — Retrieval Engine and Chatbot
+
+### Day 29 — Vector Index
+
+**New component:** `backend/src/retrieval/` package
+
+**Purpose:** Semantic search over evidence excerpts using dense vector embeddings.
+Complements the Neo4j graph (structured, entity-based queries) with concept-based
+retrieval for questions that don't map to named entities.
+
+**Embedding model:** `all-MiniLM-L6-v2` (sentence-transformers), 384 dimensions,
+CPU-only, cosine similarity.
+
+**Vector store:** Qdrant collection `evidence` (6,069 points).
+
+**What is embedded:** Every active (non-deleted) Evidence node's quote text.
+Evidence is the only node type with free-text natural language content worth
+embedding. Persons, Organizations, Claims contain structured data, not sentences.
+
+**Point structure:**
+Each Qdrant point = one Evidence node
+- `id`: deterministic integer derived from SHA-256 hash of evidence_id
+- `vector`: 384-dim embedding of the evidence quote
+- `payload`: evidence_id, quote, claim_id, claim_type, subject_id, object_id,
+  confidence, access_level, valid_from, message_id, is_deleted
+
+**Payload indexes:** access_level (INTEGER), confidence (FLOAT),
+claim_type (KEYWORD), valid_from (KEYWORD), is_deleted (BOOL)
+— enables filtered search without full payload scan.
+
+**Permission filtering:** `access_level <= user_clearance` applied inside Qdrant
+during search. Restricted content never enters application memory.
+
+**Soft-delete integration:** `is_deleted = False` filter applied on every search.
+`mark_deleted()` flips the payload flag without removing the vector.
+
+**ID deduplication:** 6,962 evidence items fetched from Neo4j → 6,069 points
+stored. 893 shared evidence items (same quote, same email, multiple claims)
+collapsed by MERGE into single points.
+
+**Bug found and fixed:** Day 23 loader wrote evidence node identity under property
+`id` but never set `evidence_id` as a separate property. All 6,069 Evidence nodes
+had `evidence_id = null`. Fix: added `e.evidence_id = row.id` to the SET clause
+in `_load_claims_and_evidence()`, then reloaded the full graph.
+
+**Retrieval modes (two-path architecture):**
+- Neo4j (`temporal_queries.py`): entity-based, structured, time-aware queries
+- Qdrant (`qdrant_index.py`): concept-based, semantic, filter-supported queries
+These two paths are merged and ranked by the Day 31 retrieval engine.

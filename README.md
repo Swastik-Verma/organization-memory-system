@@ -663,3 +663,35 @@ matching. The evidence_verified flag is True for the same quote.
 - 5,538 current claims, 15 superseded, 33 in review
 
 **Ready for Week 5:** Retrieval engine and chatbot.
+
+
+
+## Week 5 — Retrieval Engine
+
+### Day 29 — Vector Index
+
+Built semantic search over the 6,069 evidence excerpts extracted from Enron emails.
+
+**Stack addition:** Qdrant vector database (`src/retrieval/qdrant_index.py`)
+
+**How it works:**
+Each evidence quote is converted into a 384-dimensional vector using the
+`all-MiniLM-L6-v2` sentence-transformer model (CPU-only). These vectors are stored
+in Qdrant alongside metadata (access level, confidence, claim type, entity IDs,
+soft-delete flag) enabling filtered semantic search.
+
+**Semantic search respects permissions:** The access level filter is applied
+inside Qdrant during the vector search itself — restricted content is never
+returned regardless of query.
+
+**To rebuild the vector index:**
+```bash
+cd backend
+python scripts/build_vector_index.py --recreate
+```
+
+**Sanity check results:**
+Query: "California energy trading"
+- score=0.71 — "you asked for a California energy expert"
+- score=0.64 — "Northern California Electricity Prices"
+- score=0.60 — "California power prices next summer"
