@@ -1323,8 +1323,11 @@ data files. It is safe to run at any time.
 with all sections. The structure is designed to map directly to
 frontend dashboard widgets.
 
-**Baseline comparison** — the report is saved to
-`data/processed/health_report.json` with a timestamp. Future reports
+**Baseline comparison** — Reports are saved to `data/processed/health_report_{timestamp}.json`
+(e.g. `health_report_20260824_073000.json`). Each run creates a new file — the baseline is never overwritten. The frontend health dashboard (Day 42) reads the most recent report file. Historical reports are retained for trend comparison.
+
+Current baseline saved: `health_report.json`
+Future reports
 can be compared against this baseline to detect degradation.
 
 **Most important metric** — evidence verification rate. A drop below
@@ -1338,3 +1341,111 @@ new data types not covered by the prompt, etc.).
 | `src/graph/health_monitor.py` | HealthMonitor class, 7 metric methods |
 | `scripts/run_health_check.py` | Runner with formatted output + --save flag |
 | `tests/test_health_monitor.py` | Unit tests for all metric methods |
+
+
+
+
+### Day 28 — Week 4 Review
+
+#### What was verified
+
+Full end-to-end verification across all 6 Week 4 components.
+82/83 automated checks passed.
+
+#### Verification script (`scripts/verify_week4.py`)
+
+6 sections, ~83 checks total:
+
+**1. Graph integrity** — node/edge counts match expected values.
+All 11 checks passed.
+
+**2. Temporal queries — known facts** — Sally Beck's reporting chain
+verified against source emails:
+- Chain: Richard Causey → Brent Price → Louise Kitchen
+- Chronological sorting verified
+- Exactly one current claim verified
+- Point-in-time queries verified:
+  - March 2000 → Causey ✓
+  - January 2001 → Kitchen ✓
+
+This is the most important verification — it proves the temporal
+model correctly answers "who did X report to at time T."
+
+**3. Evidence trail end-to-end** — full path verified:
+Claim (works_with Maureen McVicker)
+→ Evidence: "I printed this out for you..."
+(char_start=5, char_end=61, verified=True)
+→ Source email: "Cynthia Sandherr's accomplishments/objectives"
+(from: allison.navin@enron.com)
+
+
+One check failed: exact substring match of quote in raw body.
+This is a verification script limitation — the actual pipeline
+uses normalized whitespace matching (Day 8) which correctly verified
+this quote (evidence_verified=True). The raw body contains "SK - "
+prefix that shifts the quote's position for simple string matching.
+
+**4. Permission filtering** — 37+ checks verified:
+- Intern (PUBLIC): 37 claims for Kean
+- Executive (RESTRICTED): 59 claims for Kean
+- All 37 intern claims verified at access_level=1
+- Executive sees 22 more claims than intern
+
+**5. Health metrics** — all thresholds met:
+- Quality score: 97.9/100
+- Average confidence: 0.9504
+- Evidence verification rate: 96.7%
+- Current claims: 5,538
+- Superseded claims: 15
+
+**6. Cross-component integration** — all pipeline files present,
+full entity→claim→evidence→email chain confirmed working.
+
+#### Week 4 final statistics
+
+| Metric | Value |
+|---|---|
+| Total nodes | 56,062 |
+| Total edges | 121,589 |
+| Quality score | 97.9/100 |
+| Average confidence | 0.9504 |
+| Evidence verification rate | 96.7% |
+| Current claims | 5,538 |
+| Superseded claims | 15 |
+| Conflicted claims (review) | 33 |
+| Verification checks passed | 82/83 |
+
+#### Known limitations documented after Week 4 review
+
+1. **96 claims without SUBJECT edge** — entity IDs that changed
+   during Day 17 fuzzy matching are not reflected in
+   `resolved_claims.jsonl`. A post-merge ID update step in the
+   claim dedup pipeline would fix this.
+
+2. **22 claims without OBJECT edge** — same cause as above.
+
+3. **SUBJECT/OBJECT edges connect only to Person nodes** — claims
+   with Organization as subject or object get no structural edge.
+   Extending the Cypher to also match Organization nodes would fix.
+
+4. **Confidence decay parameters are hardcoded** — `DECAY_RATE_PER_YEAR`,
+   `ARCHIVE_THRESHOLD`, and `MINIMUM_AGE_DAYS` in
+   `incremental_updater.py` are constants. In production these would
+   be stored in a config layer and exposed via a protected admin API
+   endpoint so data engineers can tune without a code deployment.
+
+5. **Access level classification uses keyword heuristics** — in
+   production these would come from source system labels (Microsoft
+   Purview, Google DLP).
+
+#### Week 4 component summary
+
+| Day | Component | Status |
+|---|---|---|
+| 22 | Neo4j schema (revised) | Complete |
+| 23 | Graph loader — 56k nodes, 121k edges | Complete |
+| 24 | Temporal query engine — 13 methods | Complete |
+| 25 | Incremental updates, confidence decay, drift detection | Complete |
+| 26 | Permission layer — 4 access levels | Complete |
+| 27 | Health monitoring — 7 metric categories | Complete |
+| 28 | Week 4 review — 82/83 checks passed | Complete |

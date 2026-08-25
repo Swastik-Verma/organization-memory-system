@@ -16,6 +16,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from datetime import datetime
 
 from neo4j import GraphDatabase
 
@@ -187,7 +188,8 @@ def main():
 
     # ---- Save ----
     if args.save:
-        save_path = DATA_DIR / "health_report.json"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = DATA_DIR / f"health_report_{timestamp}.json"
         save_path.write_text(json.dumps(report, indent=2, default=str))
         print(f"\n  Report saved to {save_path}")
 

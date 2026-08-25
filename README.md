@@ -621,8 +621,45 @@ Use `--save` to persist the report for baseline comparison:
 
 ```bash
 python scripts/run_health_check.py --save
-# Report saved to data/processed/health_report.json
+# Current Baseline Report saved to data/processed/health_report.json
+# Future Reports saved to data/processed/health_report_{timestamp}.json
+# Each run creates a new timestamped file — baseline is preserved.
+# Day 42 frontend reads the most recent report for the health dashboard.
 ```
 
 Feeds the frontend health dashboard (Day 42): confidence histogram,
 claims-by-status donut chart, top entities list, data quality table.
+
+
+### Day 28 — Week 4 Review
+
+Week 4 review and verification. 82/83 automated checks passed
+across all 6 Week 4 components.
+
+**Verification script (`scripts/verify_week4.py`) covers:**
+- Graph integrity (11 checks) — node/edge counts match expectations
+- Temporal queries (9 checks) — Sally Beck's reporting chain
+  (Causey → Price → Kitchen) verified against source emails with
+  correct point-in-time behavior
+- Evidence trail (8 checks) — full path from claim to source email
+  working end-to-end
+- Permission filtering (37+ checks) — intern sees 37 claims,
+  executive sees 59, all intern claims confirmed at PUBLIC level
+- Health metrics (8 checks) — 97.9/100 quality score, 96.7%
+  verification rate, all thresholds met
+- Cross-component integration (6 checks) — all pipeline files
+  present, full chain confirmed working
+
+**The one failed check:** exact substring quote matching in raw
+email body — a verification script limitation (uses simple `in`
+operator) vs the actual pipeline which uses normalized whitespace
+matching. The evidence_verified flag is True for the same quote.
+
+**Week 4 final state:**
+- 56,062 nodes, 121,589 edges
+- Quality score: 97.9/100
+- Average confidence: 0.9504
+- Evidence verification rate: 96.7%
+- 5,538 current claims, 15 superseded, 33 in review
+
+**Ready for Week 5:** Retrieval engine and chatbot.
