@@ -1230,3 +1230,111 @@ indistinguishable from content not existing.
 | `src/graph/permissions.py` | PermissionManager + UserContext |
 | `scripts/test_permissions.py` | Demo runner + --clear flag |
 | `tests/test_permissions.py` | Unit tests for UserContext logic |
+
+
+
+
+### Day 27 — Health Monitoring
+
+#### What was built
+
+A comprehensive health monitoring system (`src/graph/health_monitor.py`)
+that measures graph quality, pipeline health, and system status across
+7 metric categories. Feeds the frontend health dashboard (Day 42) and
+provides baseline measurements for detecting quality degradation over time.
+
+#### The 7 metric categories
+
+**1. Graph size**
+Node and edge counts by type. Sudden drops indicate data loss.
+Sudden spikes indicate duplicate loading. Baseline for all other metrics.
+
+**2. Claim quality**
+- Average, min, max confidence across all claims
+- Confidence distribution in 5 buckets (0.00-0.29, 0.30-0.49, 0.50-0.69, 0.70-0.89, 0.90-1.00)
+- Claims grouped by type (reports_to, works_with, etc.)
+- Evidence coverage: how many claims have 0, 1, or multiple evidence items
+- Evidence verification rate: what percentage of evidence quotes were found verbatim in source emails
+
+**3. Temporal health**
+- Claims by status (current, superseded, archived, review)
+- Supersession edge count (temporal succession chains)
+- Conflict pair count (unresolved contradictions)
+- Undated claims (from emails with null dates)
+- Date range across all dated claims
+
+**4. Access level distribution**
+Counts per access level (PUBLIC/INTERNAL/CONFIDENTIAL/RESTRICTED) for
+Claims, Evidence, Messages, and Decisions. Monitors permission
+classification health.
+
+**5. Entity statistics**
+- Person count, average/max mention count, total aliases, total emails
+- Organization count, org type distribution
+- Top 10 most-mentioned persons (shows who the graph is "about")
+
+**6. Data quality**
+Structural integrity checks:
+- Claims without SUBJECT edge
+- Claims without OBJECT edge
+- Claims without any evidence
+- Evidence without FROM_MESSAGE link
+- Messages without SENT_BY edge
+- Decisions without MADE_BY edge
+- Decisions with unresolved affects strings
+- Soft-deleted node count
+
+**Quality score formula:**
+issue_rate = (claims_without_subject + claims_without_object
++ claims_without_evidence) / total_claims
+quality_score = (1 - issue_rate) × 100 [0-100 scale]
+
+
+**7. Pipeline status**
+Checks all required data files for existence, size (MB), record count,
+and last-modified timestamp. Detects stale pipelines (files not updated
+in expected timeframes).
+
+#### Observed metrics (Enron corpus baseline)
+
+**Claim quality:**
+- Average confidence: ~0.98 (high — mostly approved claims)
+- Evidence verification rate: 96.1% (7,533 of 7,836 quotes found verbatim)
+- Claims with no evidence: small number (relationships only have evidence)
+
+**Temporal health:**
+- Current claims: 5,538
+- Superseded claims: 15
+- Review claims: 33
+- Conflict pairs: ~25
+- Date range: 1997 to 2002
+
+**Data quality:**
+- Claims without SUBJECT: 96 (1.7% — entity ID mismatches from fuzzy merge)
+- Claims without OBJECT: 22 (0.4%)
+- Quality score: ~98/100
+
+#### Design decisions
+
+**Read-only** — the health monitor never writes to Neo4j or modifies
+data files. It is safe to run at any time.
+
+**Structured output** — `full_health_report()` returns a single dict
+with all sections. The structure is designed to map directly to
+frontend dashboard widgets.
+
+**Baseline comparison** — the report is saved to
+`data/processed/health_report.json` with a timestamp. Future reports
+can be compared against this baseline to detect degradation.
+
+**Most important metric** — evidence verification rate. A drop below
+90% signals the extraction prompt is degrading (model version changed,
+new data types not covered by the prompt, etc.).
+
+#### Files
+
+| File | Purpose |
+|---|---|
+| `src/graph/health_monitor.py` | HealthMonitor class, 7 metric methods |
+| `scripts/run_health_check.py` | Runner with formatted output + --save flag |
+| `tests/test_health_monitor.py` | Unit tests for all metric methods |

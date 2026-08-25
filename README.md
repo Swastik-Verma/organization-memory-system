@@ -591,3 +591,38 @@ Claims: 2,821 PUBLIC | 1,437 INTERNAL | 1,241 CONFIDENTIAL | 87 RESTRICTED
 In production: source system labels (Microsoft Purview, Google DLP)
 replace keyword heuristics; user clearance comes from identity
 provider (Active Directory, Okta) via JWT tokens.
+
+
+### Day 27 — Health Monitoring
+
+Built a comprehensive health monitoring system
+(`src/graph/health_monitor.py`) that measures graph quality and
+pipeline health across 7 categories.
+
+**7 metric categories:**
+- **Graph size** — node/edge counts by type (baseline for degradation detection)
+- **Claim quality** — confidence distribution, evidence coverage, verification rate
+- **Temporal health** — status distribution (current/superseded/review), conflict count
+- **Access levels** — permission classification distribution per content type
+- **Entity stats** — person/org counts, org types, top 10 most-mentioned entities
+- **Data quality** — structural issues (missing edges, unlinked nodes), quality score
+- **Pipeline status** — data file freshness, sizes, record counts
+
+**Quality score:** Single 0-100 metric based on structural issue rate.
+Current baseline: ~98/100 (96 claims with missing SUBJECT edge out
+of 5,586 total = 1.7% issue rate).
+
+**Most important metric:** Evidence verification rate (96.1%) —
+measures whether extracted claims are grounded in actual source text.
+A drop signals extraction prompt degradation.
+
+**Safe to run at any time** — health monitor is read-only.
+Use `--save` to persist the report for baseline comparison:
+
+```bash
+python scripts/run_health_check.py --save
+# Report saved to data/processed/health_report.json
+```
+
+Feeds the frontend health dashboard (Day 42): confidence histogram,
+claims-by-status donut chart, top entities list, data quality table.
