@@ -695,3 +695,48 @@ Query: "California energy trading"
 - score=0.71 — "you asked for a California energy expert"
 - score=0.64 — "Northern California Electricity Prices"
 - score=0.60 — "California power prices next summer"
+
+
+
+### Day 30 — Query Understanding
+
+Built the layer that sits between a user's raw question and the retrieval
+engine — parsing natural language into a structured retrieval plan.
+
+**What it does:**
+Every user question goes through a 5-step pipeline:
+1. Gemini parses the question → extracts entity names, question type,
+   time references, ambiguity signals
+2. Each entity name is resolved to a canonical Neo4j ID via name + alias search
+3. A time constraint is built (point / range / before / after / none)
+4. Ambiguity is detected — if multiple graph matches exist, the user is asked
+   to clarify before retrieval runs
+5. Retrieval strategy is chosen: graph (Neo4j traversal), semantic (Qdrant),
+   or hybrid (both)
+
+**Example outputs:**
+
+"Who did Sally Beck report to in March 2001?"
+→ type=who, entity=person:beck-sally:..., time=point(2001-03-01), strategy=hybrid
+
+"What concerns were raised about California energy prices?"
+→ type=what, no entity resolved, strategy=semantic
+
+"Tell me about Smith."
+→ needs_clarification=True, 4 options shown to user
+
+**Key design decisions:**
+- Organization nodes rank above Person nodes in entity search — prevents
+  email address substring matches from swamping organization name matches
+- Clarification is unconditional when alternatives exist — never silently
+  picks the wrong person
+- LLM failure degrades gracefully to semantic search — no crash, reduced quality
+- Switched from Vertex AI to AI Studio free tier (permanent quota,
+  no expiry concerns)
+
+**To test:**
+```bash
+cd backend
+python scripts/test_query_understanding.py           # batch test, 10 questions
+python scripts/test_query_understanding.py -i        # interactive mode
+```

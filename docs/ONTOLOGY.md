@@ -1500,3 +1500,80 @@ in `_load_claims_and_evidence()`, then reloaded the full graph.
 - Neo4j (`temporal_queries.py`): entity-based, structured, time-aware queries
 - Qdrant (`qdrant_index.py`): concept-based, semantic, filter-supported queries
 These two paths are merged and ranked by the Day 31 retrieval engine.
+
+
+
+### Day 30 — Query Understanding
+
+**New module:** `backend/src/retrieval/query_understanding.py`
+
+**Purpose:** Parses natural language questions into structured `QueryPlan` objects
+that tell the retrieval engine (Day 31) exactly what kind of retrieval to perform —
+which entities are involved, what time constraint applies, and whether to use graph
+traversal, semantic search, or both.
+
+**Output contract — `QueryPlan` fields:**
+- `question_type`: who / what / when / why / history / current / comparison / list / yes_no
+- `entities`: list of `ResolvedEntity` (raw name → canonical graph ID via Neo4j lookup)
+- `time_constraint`: point / range / before / after / none, with ISO date bounds
+- `retrieval_strategy`: graph / semantic / hybrid
+- `needs_clarification`: True when resolution is ambiguous or entity not found
+- `clarification_reason`: human-readable explanation shown to the user
+- `semantic_query`: reformulated search string for Qdrant
+
+**Processing pipeline (5 steps):**
+1. LLM call (Gemini, temperature=0, thinking_budget=0) extracts mentioned entities,
+   question type, time references, ambiguity signals, and semantic keywords
+2. Entity resolution — each name searched in Neo4j across Person + Organization
+   nodes by canonical_name and non-email aliases, sorted by priority then mention_count
+3. Time constraint built from LLM output — ISO dates where possible, raw text preserved
+4. Ambiguity detection — triggers clarification when alternatives exist (unconditional)
+   or when entity is not found in graph
+5. Strategy selection: resolved entities + semantic keywords → HYBRID;
+   resolved entities only → GRAPH; no entities → SEMANTIC
+
+**Entity resolution design decisions:**
+
+*Organization-first ranking:* UNION query returns Organization matches with
+priority=2 and Person matches with priority=1. Python sort applies
+`(priority, mention_count)` descending so Organization nodes always rank above
+Person nodes when both match. Fixes the case where "Enron" resolved as a Person
+because every employee's email alias contains the substring "enron".
+
+*Email alias exclusion:* Person alias search excludes aliases containing '@'.
+Without this, searching "enron" matched 15,000 people's email addresses as
+substring hits before matching the Organization node.
+
+*Clarification is unconditional when alternatives exist:* Any entity with
+at least one alternative triggers `needs_clarification = True` regardless of
+confidence score. The correct entity is still stored as `canonical_id` (for
+Day 31's graph traversal), but the user is shown options before an answer is
+generated. This is conservative — it asks more questions — but prevents silently
+answering about the wrong person.
+
+*Zero-match fallback:* If an entity is not found in the graph, strategy falls
+back to SEMANTIC so Qdrant can attempt concept-based retrieval using the entity
+name as a search term. The question is not abandoned.
+
+**Known limitations and silent decisions:**
+- Entity search is capped at LIMIT 10 per node type — entities ranked below 10
+  by mention_count are invisible to resolution
+- Alternatives shown to user are capped at 4 — up to 6 further matches silently dropped
+- LLM failure degrades silently to concept query (SEMANTIC strategy, raw question
+  as search term) — no error shown to user, answer quality drops without warning
+- GRAPH-only strategy rarely triggers in practice because the LLM almost always
+  generates semantic_keywords, making most questions HYBRID
+- Invalid question types from LLM default to "what"; invalid time types default to
+  "none" — both silent
+- The 3x mention_count ratio heuristic for confidence scoring (0.9 vs 0.5) is a
+  judgment call, not empirically tuned; confidence no longer affects clarification
+  since clarification is unconditional when alternatives exist
+- Organization-first priority can overcorrect: "Tell me about Smith" resolves to
+  "Salomon Smith Barney" (org) instead of a person named Smith — clarification
+  catches this case
+
+**LLM configuration:**
+- Model: `gemini-3.1-flash-lite` via AI Studio free tier (permanent, no expiry)
+- `temperature=0.0` — deterministic parsing
+- `thinking_budget=0` — classification task, no reasoning tokens needed
+- Fallback on any API failure: treat as concept query, no crash
