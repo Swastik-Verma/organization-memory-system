@@ -1106,3 +1106,127 @@ Active scheduling is not implemented since the corpus is historical.
 | `src/graph/incremental_updater.py` | All three features |
 | `scripts/run_incremental_update.py` | Demonstration runner |
 | `tests/test_incremental_updater.py` | Unit tests |
+
+
+
+### Day 26 — Permission Layer
+
+#### What was built
+
+Role-based access control over the knowledge graph, implemented in
+`src/graph/permissions.py`. Every content node gets a numeric
+`access_level` property. Every query filters by the requesting
+user's `clearance_level`. Filtering happens inside Cypher — restricted
+content never leaves Neo4j for unauthorized users.
+
+#### Access model
+
+Four levels, numeric for easy comparison (`content.access_level <= user.clearance_level`):
+
+| Level | Name | Who can see |
+|---|---|---|
+| 1 | PUBLIC | Everyone (default) |
+| 2 | INTERNAL | Employees and above |
+| 3 | CONFIDENTIAL | Management and above |
+| 4 | RESTRICTED | Executives and legal only |
+
+#### What gets classified
+
+| Node type | Classification method |
+|---|---|
+| Message | Mailbox origin + keyword matching on subject/body |
+| Evidence | Inherits from source Message |
+| Claim | Inherits highest level from its Evidence |
+| Decision | Keyword matching on description + inherits from source Message via `source_message_id` |
+
+Deals, Persons, Organizations are not classified — knowing an entity
+exists is not sensitive. Sensitive facts about entities are captured
+in Claims and Decisions, which are classified.
+
+#### Classification rules
+
+**Message classification:**
+- Default: PUBLIC (1)
+- Legal mailboxes (MANN-K, NEMEC-G, JONES-T) → INTERNAL (2)
+- Executive mailboxes (LAY-K, KITCHEN-L) → CONFIDENTIAL (3)
+- Keywords ("confidential", "compensation", "board of directors" etc.) → CONFIDENTIAL (3)
+- Keywords ("restricted", "subpoena", "SEC investigation", "fraud" etc.) → RESTRICTED (4)
+
+**Inheritance chain:**
+
+Message (classified by origin + keywords)
+→ Evidence inherits from Message
+→ Claim inherits max level from its Evidence
+Decision (classified by keywords + source_message_id reference to Message)
+
+
+
+**Why max for Claims:** If a claim has evidence at levels 1, 1, 3 —
+the claim gets level 3. The most sensitive source determines
+classification. Showing the claim while hiding its evidence would
+still leak the confidential fact.
+
+#### Why filter in Cypher, not Python
+
+If filtering happened in Python, restricted data would exist in
+application memory — a bug, log statement, or stack trace could
+expose it. Filtering in Cypher means the database enforces the
+boundary. This is defense in depth — security is as close to the
+data as possible.
+
+#### `source_message_id` on Decision nodes
+
+Decisions don't have a `FROM_MESSAGE` edge (unlike Evidence).
+To enable message-based inheritance, `source_message_id` is stored
+as a property on Decision nodes during loading (Day 23 loader).
+The classification step uses this to look up the source Message's
+`access_level` and inherit it if higher than the keyword-assigned level.
+
+This fixed a gap where Decisions from legal and executive mailboxes
+were getting PUBLIC classification despite their sensitive context.
+
+After fix:
+- Before: Decisions `{PUBLIC: 10,577, CONFIDENTIAL: 191, RESTRICTED: 12}`
+- After: `{PUBLIC: 5,252, INTERNAL: 3,208, CONFIDENTIAL: 2,191, RESTRICTED: 129}`
+
+#### Access level distribution (Enron corpus)
+
+| Type | PUBLIC | INTERNAL | CONFIDENTIAL | RESTRICTED |
+|---|---|---|---|---|
+| Claim | 2,821 | 1,437 | 1,241 | 87 |
+| Evidence | 3,036 | 1,696 | 1,249 | 88 |
+| Message | 4,316 | 2,493 | 1,692 | 94 |
+| Decision | 5,252 | 3,208 | 2,191 | 129 |
+
+~50% of content is PUBLIC, ~27% INTERNAL, ~21% CONFIDENTIAL, ~1-2%
+RESTRICTED. The pyramid shape (most content at lower levels) matches
+realistic organizational classification.
+
+#### Verified
+
+Querying Steven J. Kean's current state at different clearance levels:
+- Intern (PUBLIC): 37 claims visible
+- Employee (INTERNAL): 37 claims visible
+- Manager (CONFIDENTIAL): 58 claims visible (+21 confidential)
+- Executive (RESTRICTED): 59 claims visible (+1 restricted)
+
+PROOF: Executive sees 22 more claims than intern. Restricted content
+is invisible to low-clearance users.
+
+#### Production notes
+
+In production, classification would use source system labels
+(Microsoft Purview, Google DLP, email sensitivity flags) rather than
+keyword heuristics. User clearance would come from the identity
+provider (Active Directory, Okta) via JWT tokens. The filtering
+and enforcement architecture remains identical. The chatbot never
+tells users "this is restricted" — it simply returns fewer results,
+indistinguishable from content not existing.
+
+#### Files
+
+| File | Purpose |
+|---|---|
+| `src/graph/permissions.py` | PermissionManager + UserContext |
+| `scripts/test_permissions.py` | Demo runner + --clear flag |
+| `tests/test_permissions.py` | Unit tests for UserContext logic |

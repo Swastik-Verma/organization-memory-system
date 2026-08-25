@@ -432,6 +432,7 @@ class GraphLoader:
                             "description": description,
                             "made_by_name": made_by_name,
                             "affects_unresolved": affects_unresolved,
+                            "source_message_id": message_id,
                             "is_deleted": False,
                         })
 
@@ -458,6 +459,7 @@ class GraphLoader:
         SET d.description = row.description,
             d.made_by_name = row.made_by_name,
             d.affects_unresolved = row.affects_unresolved,
+            d.source_message_id = row.source_message_id,
             d.is_deleted = row.is_deleted
         """
         count = _run_in_batches(session, cypher, decisions)

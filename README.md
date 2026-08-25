@@ -559,3 +559,35 @@ explainable in technical interviews.
 New emails → parse → LLM extract → enrich → entity resolve
 → claim dedup → conflict resolve → run_incremental_update (load)
 → apply_confidence_decay (schedule) → detect_graph_drift (health)
+
+
+### Day 26 — Permission Layer
+
+Built role-based access control over the knowledge graph
+(`src/graph/permissions.py`).
+
+**Four clearance levels:** PUBLIC (1), INTERNAL (2), CONFIDENTIAL (3),
+RESTRICTED (4). Rule: `content.access_level <= user.clearance_level`.
+
+**Classification applied to:** Messages (mailbox origin + keywords),
+Evidence (inherits from source message), Claims (inherits max level
+from evidence), Decisions (keywords + source message inheritance via
+`source_message_id` property added to Decision nodes).
+
+**Key design:** Filtering happens inside Cypher — restricted content
+never leaves Neo4j for unauthorized users. An intern and a VP asking
+the same chatbot question get different answers without either knowing
+why. The chatbot never says "this is restricted" — it simply returns
+fewer results.
+
+**Verified on Enron corpus:**
+- Intern (PUBLIC clearance): sees 37 claims about Steven J. Kean
+- Executive (RESTRICTED clearance): sees 59 claims
+- Proof: executive sees 22 more claims than intern
+
+**Access level distribution after classification:**
+Claims: 2,821 PUBLIC | 1,437 INTERNAL | 1,241 CONFIDENTIAL | 87 RESTRICTED
+
+In production: source system labels (Microsoft Purview, Google DLP)
+replace keyword heuristics; user clearance comes from identity
+provider (Active Directory, Okta) via JWT tokens.
