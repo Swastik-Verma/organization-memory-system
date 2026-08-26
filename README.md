@@ -740,3 +740,17 @@ cd backend
 python scripts/test_query_understanding.py           # batch test, 10 questions
 python scripts/test_query_understanding.py -i        # interactive mode
 ```
+
+
+
+### Day 31 — Hybrid Retrieval Engine
+- `retrieval_engine.py`: orchestrates graph + semantic retrieval, merges
+  and ranks results into ContextPack for chatbot consumption
+- `backfill_valid_to.py`: one-time script to populate valid_to on Claims
+- Fixed Claim property names (c.id not c.claim_id, direct subject/object
+  fields instead of relationship traversal)
+- Fixed Qdrant date filtering (Unix timestamps instead of string Range)
+- Fixed min_should Filter construction (removed, Qdrant defaults to 1)
+- Extended entity resolution to Deal and Decision nodes
+- Added semantic fallback when entity resolution returns nothing
+- Updated QUERY_PARSE_PROMPT with correct 5 claim types

@@ -53,24 +53,25 @@ def fetch_evidence_from_neo4j(driver) -> list[dict]:
     WHERE e.is_deleted = false
     OPTIONAL MATCH (c:Claim)-[:SUPPORTED_BY]->(e)
     OPTIONAL MATCH (e)-[:FROM_MESSAGE]->(m:Message)
-    OPTIONAL MATCH (c)-[:SUBJECT]->(subj)
-    OPTIONAL MATCH (c)-[:OBJECT]->(obj)
     RETURN
         e.evidence_id AS evidence_id,
         e.quote AS quote,
         e.evidence_verified AS evidence_verified,
-        c.claim_id AS claim_id,
+        c.id AS claim_id,
         c.claim_type AS claim_type,
         c.confidence AS confidence,
         c.access_level AS access_level,
         c.valid_from AS valid_from,
         c.is_deleted AS claim_is_deleted,
-        subj.person_id AS subject_person_id,
-        subj.org_id AS subject_org_id,
-        obj.person_id AS object_person_id,
-        obj.org_id AS object_org_id,
+        c.subject_id AS subject_id,
+        c.object_id AS object_id,
         m.message_id AS message_id,
-        e.is_deleted AS is_deleted
+        e.is_deleted AS is_deleted,
+        c.valid_to AS valid_to,
+        c.status AS status,
+        c.mention_count AS mention_count,
+        c.subject_name AS subject_name,
+        c.object_name AS object_name
     """
 
     records = []
@@ -78,8 +79,8 @@ def fetch_evidence_from_neo4j(driver) -> list[dict]:
         result = session.run(query)
         for row in result:
             # Subject could be Person or Org
-            subject_id = row["subject_person_id"] or row.get("subject_org_id") or ""
-            object_id = row["object_person_id"] or row.get("object_org_id") or ""
+            subject_id = row["subject_id"] or ""
+            object_id = row["object_id"] or ""
 
             # Format valid_from as ISO string
             valid_from_raw = row["valid_from"]
@@ -90,6 +91,16 @@ def fetch_evidence_from_neo4j(driver) -> list[dict]:
                     valid_from = str(valid_from_raw)
             else:
                 valid_from = None
+
+            # Format valid_to as ISO string
+            valid_to_raw = row["valid_to"]
+            if valid_to_raw is not None:
+                if hasattr(valid_to_raw, "iso_format"):
+                    valid_to = valid_to_raw.iso_format()
+                else:
+                    valid_to = str(valid_to_raw)
+            else:
+                valid_to = None
 
             records.append({
                 "evidence_id": row["evidence_id"],
@@ -103,6 +114,11 @@ def fetch_evidence_from_neo4j(driver) -> list[dict]:
                 "valid_from": valid_from,
                 "message_id": row["message_id"] or "",
                 "is_deleted": row["is_deleted"] or False,
+                "valid_to": valid_to,
+                "status": row["status"] or "",
+                "mention_count": row["mention_count"] or 0,
+                "subject_name": row["subject_name"] or "",
+                "object_name": row["object_name"] or "",
             })
 
     return records

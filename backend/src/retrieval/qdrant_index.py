@@ -32,6 +32,15 @@ EMBEDDING_DIM = 384
 BATCH_SIZE = 256
 
 
+def _date_to_timestamp(date_str):
+    if date_str is None:
+        return None
+    try:
+        return int(datetime.fromisoformat(str(date_str)).timestamp())
+    except:
+        return None
+
+
 class QdrantIndex:
     """Manages the Qdrant vector collection for evidence excerpts."""
 
@@ -85,7 +94,7 @@ class QdrantIndex:
             "access_level": PayloadSchemaType.INTEGER,
             "confidence": PayloadSchemaType.FLOAT,
             "claim_type": PayloadSchemaType.KEYWORD,
-            "valid_from": PayloadSchemaType.KEYWORD,  # ISO date string
+            "valid_from": PayloadSchemaType.FLOAT,  # ISO date string
             "is_deleted": PayloadSchemaType.BOOL,
         }
         for field_name, schema_type in index_fields.items():
@@ -157,9 +166,14 @@ class QdrantIndex:
                 "claim_type": record.get("claim_type", ""),
                 "subject_id": record.get("subject_id", ""),
                 "object_id": record.get("object_id", ""),
+                "subject_name": record.get("subject_name", ""),
+                "object_name": record.get("object_name", ""),
                 "confidence": record.get("confidence", 0.0),
                 "access_level": record.get("access_level", 1),
-                "valid_from": record.get("valid_from"),  # None OK
+                "valid_from": _date_to_timestamp(record.get("valid_from")),#record.get("valid_from"),  # None OK
+                "valid_to": _date_to_timestamp(record.get("valid_to")),#record.get("valid_to"),
+                "status": record.get("status", ""),
+                "mention_count": record.get("mention_count", 0),
                 "message_id": record.get("message_id", ""),
                 "is_deleted": record.get("is_deleted", False),
             }
@@ -234,14 +248,18 @@ class QdrantIndex:
             )
 
         if date_from:
-            must_conditions.append(
-                FieldCondition(key="valid_from", range=Range(gte=date_from)),
-            )
+            ts = _date_to_timestamp(date_from)
+            if ts:
+                must_conditions.append(
+                    FieldCondition(key="valid_from", range=Range(gte=ts)),
+                )
 
         if date_to:
-            must_conditions.append(
-                FieldCondition(key="valid_from", range=Range(lte=date_to)),
-            )
+            ts = _date_to_timestamp(date_to)
+            if ts:
+                must_conditions.append(
+                    FieldCondition(key="valid_from", range=Range(lte=ts)),
+                )
 
         # Entity filter — should match either subject or object
         # Qdrant doesn't have native OR on two fields, so we use
@@ -253,13 +271,17 @@ class QdrantIndex:
                 FieldCondition(key="object_id", match=MatchValue(value=entity_id)),
             ]
 
-        search_filter = Filter(
-            must=must_conditions,
-            should=should_conditions if should_conditions else None,
-        )
-        # If we have should conditions (entity filter), we need at least one to match
         if should_conditions:
-            search_filter.min_should = {"min_count": 1}
+            search_filter = Filter(
+                must=must_conditions,
+                should=should_conditions,
+                # min_should=MinShould(min_count = 1),
+                # min_should not needed — Qdrant requires at least 1 by default
+            )
+        else:
+            search_filter = Filter(
+                must=must_conditions,
+            )
 
         results = self.client.query_points(
             collection_name=self.collection_name,

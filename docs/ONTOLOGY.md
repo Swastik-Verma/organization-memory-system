@@ -1577,3 +1577,32 @@ name as a search term. The question is not abandoned.
 - `temperature=0.0` — deterministic parsing
 - `thinking_budget=0` — classification task, no reasoning tokens needed
 - Fallback on any API failure: treat as concept query, no crash
+
+
+
+
+## Day 31 — Hybrid Retrieval Engine
+
+New module: `backend/src/retrieval/retrieval_engine.py`
+
+Orchestrates graph traversal (Neo4j) and semantic search (Qdrant) into
+unified hybrid retrieval. Produces ContextPack objects for the chatbot.
+
+Pipeline: QueryPlan → graph retrieve + semantic retrieve → merge by
+claim_id → rank by composite score (relevance × recency × confidence
+× source_boost) → enrich with evidence → ContextPack.
+
+Graph queries read subject_id, object_id, subject_name, object_name
+directly from Claim nodes (no relationship traversal to Person/Org).
+
+Entity resolution extended to Deal and Decision nodes, conditional on
+LLM-assigned entity type to prevent cross-type pollution.
+
+Semantic fallback: when no entity resolves, system runs semantic-only
+search instead of returning empty clarification.
+
+Qdrant date filtering uses Unix timestamps (FLOAT index) instead of
+ISO string Range (which only accepts numeric types).
+
+Backfill script (backfill_valid_to.py) writes valid_to from
+resolved_claims.jsonl into Neo4j Claim nodes.

@@ -112,7 +112,7 @@ QUERY_PARSE_PROMPT = """You are a query parser for an organizational memory syst
 
 Your job: analyze the user's question and extract structured information.
 The system has a Neo4j knowledge graph with these entity types: Person, Organization, Deal, Decision.
-Claims (relationships) between entities include: reports_to, works_at, works_with, manages, knows.
+Claims (relationships) between entities include: reports_to, works_with, negotiating_with, requests_from, informs.
 
 Given a user question, respond with ONLY a JSON object (no markdown, no backticks, no explanation):
 
@@ -150,8 +150,10 @@ Rules:
    - Pronouns are used without clear antecedents
 4. For claim_types, only include types the question is specifically about:
    - "who does X report to" → ["reports_to"]
-   - "where does X work" → ["works_at"]
    - "who works with X" → ["works_with"]
+   - "who is X negotiating with" → ["negotiating_with"]
+   - "what did X request from Y" → ["requests_from"]
+   - "what did X inform Y about" → ["informs"]
    - General questions → []
 5. semantic_keywords: rephrase the question as a short search query.
    - "Who was Skilling's boss?" → "Jeff Skilling reports to supervisor manager"
@@ -338,7 +340,8 @@ class QueryUnderstanding:
                 continue
 
             # Call find_entity in Neo4j
-            matches = self._find_entity_in_graph(raw_name)
+            # matches = self._find_entity_in_graph(raw_name)
+            matches = self._find_entity_in_graph(raw_name, entity_type_hint)
 
             if not matches:
                 # Entity not found — zero results
@@ -391,7 +394,7 @@ class QueryUnderstanding:
 
         return resolved
 
-    def _find_entity_in_graph(self, name: str) -> list[dict]:
+    def _find_entity_in_graph(self, name: str, entity_type: str = "unknown") -> list[dict]:
         """
         Search for an entity by name in Neo4j.
 
@@ -401,36 +404,78 @@ class QueryUnderstanding:
         Uses the same Cypher pattern as find_entity() from
         temporal_queries.py but returns raw dicts for our processing.
         """
-        query = """
-        MATCH (p:Person)
-        WHERE p.is_deleted = false
-          AND (
-            toLower(p.canonical_name) CONTAINS toLower($name)
-            OR any(alias IN p.aliases WHERE toLower(alias) CONTAINS toLower($name) AND NOT alias CONTAINS '@')
-          )
-        RETURN
-            p.id AS id,
-            p.canonical_name AS name,
-            'person' AS type,
-            p.mention_count AS mention_count,
-            1 AS priority
-        ORDER BY p.mention_count DESC
-        LIMIT 10
 
-        UNION
+        name = name.strip()
+        if not name: 
+            return []
 
-        MATCH (o:Organization)
-        WHERE o.is_deleted = false
-          AND toLower(o.canonical_name) CONTAINS toLower($name)
-        RETURN
-            o.id AS id,
-            o.canonical_name AS name,
-            'organization' AS type,
-            o.mention_count AS mention_count,
-            2 AS priority
-        ORDER BY mention_count DESC
-        LIMIT 10
-        """
+        # Choose which node types to search based on LLM's classification
+        if entity_type in ("person", "organization", "unknown"):
+            query = """
+            MATCH (p:Person)
+            WHERE p.is_deleted = false
+            AND (toLower(p.canonical_name) CONTAINS toLower($name)
+                OR any(alias IN p.aliases WHERE toLower(alias) CONTAINS toLower($name)
+                        AND NOT alias CONTAINS '@'))
+            RETURN p.id AS id, p.canonical_name AS name,
+                'person' AS type, p.mention_count AS mention_count,
+                1 AS priority
+            
+            UNION
+            
+            MATCH (o:Organization)
+            WHERE o.is_deleted = false
+            AND (toLower(o.canonical_name) CONTAINS toLower($name)
+                OR any(alias IN o.aliases WHERE toLower(alias) CONTAINS toLower($name)))
+            RETURN o.id AS id, o.canonical_name AS name,
+                'organization' AS type, o.mention_count AS mention_count,
+                2 AS priority
+            """
+        
+        elif entity_type == "deal":
+            query = """
+            MATCH (d:Deal)
+            WHERE d.is_deleted = false
+            AND toLower(d.name) CONTAINS toLower($name)
+            RETURN d.id AS id, d.name AS name,
+                'deal' AS type, 1 AS mention_count,
+                3 AS priority
+            """
+        
+        elif entity_type == "decision":
+            query = """
+            MATCH (dec:Decision)
+            WHERE dec.is_deleted = false
+                AND toLower(dec.description) CONTAINS toLower($name)
+            RETURN dec.id AS id, dec.description AS name,
+                'decision' AS type, 1 AS mention_count,
+                4 AS priority
+            LIMIT 10
+            """
+        
+        else:
+            # Fallback — search Person and Organization only
+            query = """
+            MATCH (p:Person)
+            WHERE p.is_deleted = false
+            AND (toLower(p.canonical_name) CONTAINS toLower($name)
+                OR any(alias IN p.aliases WHERE toLower(alias) CONTAINS toLower($name)
+                        AND NOT alias CONTAINS '@'))
+            RETURN p.id AS id, p.canonical_name AS name,
+                'person' AS type, p.mention_count AS mention_count,
+                1 AS priority
+            
+            UNION
+            
+            MATCH (o:Organization)
+            WHERE o.is_deleted = false
+            AND (toLower(o.canonical_name) CONTAINS toLower($name)
+                OR any(alias IN o.aliases WHERE toLower(alias) CONTAINS toLower($name)))
+            RETURN o.id AS id, o.canonical_name AS name,
+                'organization' AS type, o.mention_count AS mention_count,
+                2 AS priority
+            """
+         
 
         with self.driver.session() as session:
             result = session.run(query, name=name)
