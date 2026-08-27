@@ -1,0 +1,274 @@
+"""
+Pydantic models for API requests and responses.
+
+These define the exact shape of JSON that the API accepts
+and returns. FastAPI uses them for:
+  1. Automatic request validation (wrong type = 422 error)
+  2. Automatic response serialization (dataclass → JSON)
+  3. Auto-generated Swagger/OpenAPI documentation
+"""
+
+from typing import Optional
+from pydantic import BaseModel, Field
+
+
+# ------------------------------------------------------------------ #
+# Chat
+# ------------------------------------------------------------------ #
+
+class ChatRequest(BaseModel):
+    """Request body for POST /api/chat."""
+    question: str = Field(..., min_length=1, description="Natural language question")
+
+
+class EvidenceItem(BaseModel):
+    """A single piece of evidence supporting a claim."""
+    evidence_id: Optional[str] = None
+    quote: Optional[str] = None
+    message_id: Optional[str] = None
+    score: Optional[float] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    email_subject: Optional[str] = None
+    from_addr: Optional[str] = None
+    email_date: Optional[str] = None
+
+
+class ClaimResult(BaseModel):
+    """A single claim in the chat response."""
+    claim_id: str = ""
+    claim_type: str = ""
+    subject_id: str = ""
+    subject_name: str = ""
+    object_id: str = ""
+    object_name: str = ""
+    confidence: float = 0.0
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    status: str = ""
+    mention_count: int = 0
+    relevance_score: float = 0.0
+    composite_score: float = 0.0
+    source: str = ""
+    evidence: list[dict] = Field(default_factory=list)
+
+
+class ClarificationOption(BaseModel):
+    """An option shown to the user when clarification is needed."""
+    id: str
+    name: str
+    type: str = "unknown"
+
+
+class ClarificationInfo(BaseModel):
+    """Clarification details when the query is ambiguous."""
+    message: str
+    options: list[ClarificationOption] = Field(default_factory=list)
+
+
+class EntityProfile(BaseModel):
+    """Entity info included in chat response."""
+    id: Optional[str] = None
+    name: Optional[str] = None
+    type: Optional[str] = None
+    mention_count: Optional[int] = None
+    aliases: Optional[list[str]] = None
+    emails: Optional[list[str]] = None
+
+
+class RetrievalInfo(BaseModel):
+    """Metadata about the retrieval process."""
+    graph_results: int = 0
+    semantic_results: int = 0
+    merged_count: int = 0
+    total_results: int = 0
+    strategy: str = ""
+    time_ms: float = 0.0
+
+
+class ChatResponse(BaseModel):
+    """Response body for POST /api/chat."""
+    question: str
+    claims: list[ClaimResult] = Field(default_factory=list)
+    entities: list[EntityProfile] = Field(default_factory=list)
+    clarification: Optional[ClarificationInfo] = None
+    retrieval_info: RetrievalInfo = Field(default_factory=RetrievalInfo)
+    context_text: str = ""  # formatted text for chatbot (Day 33)
+
+
+# ------------------------------------------------------------------ #
+# Entities
+# ------------------------------------------------------------------ #
+
+class EntityListItem(BaseModel):
+    """One item in the entity list."""
+    id: str
+    name: str
+    type: str
+    mention_count: int = 0
+
+
+class EntityListResponse(BaseModel):
+    """Response for GET /api/entities."""
+    entities: list[EntityListItem] = Field(default_factory=list)
+    total: int = 0
+    skip: int = 0
+    limit: int = 20
+
+
+class EntityDetailResponse(BaseModel):
+    """Response for GET /api/entities/{id}."""
+    id: str
+    name: str
+    type: str
+    mention_count: int = 0
+    aliases: list[str] = Field(default_factory=list)
+    emails: list[str] = Field(default_factory=list)
+    org_type: Optional[str] = None
+
+
+class TimelineEvent(BaseModel):
+    """One event in an entity's timeline."""
+    claim_id: str
+    claim_type: str
+    subject_name: str = ""
+    object_name: str = ""
+    description: str = ""
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    status: str = ""
+    confidence: float = 0.0
+
+
+class EntityTimelineResponse(BaseModel):
+    """Response for GET /api/entities/{id}/timeline."""
+    entity_id: str
+    entity_name: str = ""
+    events: list[TimelineEvent] = Field(default_factory=list)
+
+
+class EntityClaimsResponse(BaseModel):
+    """Response for GET /api/entities/{id}/claims."""
+    entity_id: str
+    claims: list[ClaimResult] = Field(default_factory=list)
+    total: int = 0
+
+
+# ------------------------------------------------------------------ #
+# Graph
+# ------------------------------------------------------------------ #
+
+class GraphNode(BaseModel):
+    """A node in the subgraph response."""
+    id: str
+    label: str = ""
+    type: str = ""
+    mention_count: int = 0
+
+
+class GraphEdge(BaseModel):
+    """An edge in the subgraph response."""
+    source: str
+    target: str
+    type: str = ""
+    claim_type: Optional[str] = None
+    confidence: Optional[float] = None
+
+
+class SubgraphResponse(BaseModel):
+    """Response for GET /api/graph/{id}/subgraph."""
+    center_id: str
+    nodes: list[GraphNode] = Field(default_factory=list)
+    edges: list[GraphEdge] = Field(default_factory=list)
+
+
+class GraphSearchResult(BaseModel):
+    """One result from graph search."""
+    id: str
+    name: str
+    type: str
+    mention_count: int = 0
+
+
+class GraphSearchResponse(BaseModel):
+    """Response for GET /api/graph/search."""
+    query: str
+    results: list[GraphSearchResult] = Field(default_factory=list)
+
+
+# ------------------------------------------------------------------ #
+# Evidence
+# ------------------------------------------------------------------ #
+
+class EvidenceDetailResponse(BaseModel):
+    """Response for GET /api/evidence/{id}."""
+    evidence_id: str
+    quote: str = ""
+    message_id: Optional[str] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    confidence: Optional[float] = None
+    evidence_verified: Optional[bool] = None
+    claim_id: Optional[str] = None
+    claim_type: Optional[str] = None
+    subject_name: Optional[str] = None
+    object_name: Optional[str] = None
+    email_subject: Optional[str] = None
+    email_from: Optional[str] = None
+    email_date: Optional[str] = None
+    email_body: Optional[str] = None
+
+
+# ------------------------------------------------------------------ #
+# Health
+# ------------------------------------------------------------------ #
+
+class ServiceStatus(BaseModel):
+    """Status of one backend service."""
+    name: str
+    status: str  # "ok" or "error"
+    detail: Optional[str] = None
+
+
+class HealthResponse(BaseModel):
+    """Response for GET /api/health."""
+    status: str  # "healthy" or "degraded"
+    services: list[ServiceStatus] = Field(default_factory=list)
+    counts: dict = Field(default_factory=dict)
+
+
+# ------------------------------------------------------------------ #
+# Admin
+# ------------------------------------------------------------------ #
+
+class ConflictItem(BaseModel):
+    """One conflict in the conflict list."""
+    claim_id: str
+    claim_type: str = ""
+    subject_name: str = ""
+    object_name: str = ""
+    conflicts_with: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+
+class ConflictListResponse(BaseModel):
+    """Response for GET /api/conflicts."""
+    conflicts: list[ConflictItem] = Field(default_factory=list)
+    total: int = 0
+
+
+class ReviewItem(BaseModel):
+    """One claim in the review queue."""
+    claim_id: str
+    claim_type: str = ""
+    subject_name: str = ""
+    object_name: str = ""
+    status: str = ""
+    confidence: float = 0.0
+    reason: str = ""
+
+
+class ReviewQueueResponse(BaseModel):
+    """Response for GET /api/review-queue."""
+    items: list[ReviewItem] = Field(default_factory=list)
+    total: int = 0

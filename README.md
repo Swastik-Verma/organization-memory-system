@@ -754,3 +754,15 @@ python scripts/test_query_understanding.py -i        # interactive mode
 - Extended entity resolution to Deal and Decision nodes
 - Added semantic fallback when entity resolution returns nothing
 - Updated QUERY_PARSE_PROMPT with correct 5 claim types
+
+
+
+
+### Day 32 — FastAPI Backend
+- `src/api/app.py`: FastAPI app with lifespan management and CORS
+- `src/api/dependencies.py`: shared resource injection and demo auth
+- `src/api/models.py`: Pydantic request/response schemas
+- `src/api/routes/`: chat, entities, graph, evidence, health, admin endpoints
+- `scripts/run_server.py`: CLI entry point with --host, --port, --reload
+- Swagger docs at http://localhost:8000/docs
+- Demo auth via X-User-Clearance header (JWT-ready architecture)

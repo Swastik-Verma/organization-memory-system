@@ -1606,3 +1606,35 @@ ISO string Range (which only accepts numeric types).
 
 Backfill script (backfill_valid_to.py) writes valid_to from
 resolved_claims.jsonl into Neo4j Claim nodes.
+
+
+
+
+
+## Day 32 — FastAPI Backend
+New module: `backend/src/api/`
+REST API exposing all backend capabilities to the frontend.
+Entry point: `backend/scripts/run_server.py` → uvicorn serving `src.api.app:app`.
+
+Routes:
+- POST /api/chat — question → QueryUnderstanding → RetrievalEngine → cited JSON
+- GET /api/entities — paginated entity list with type/search filters
+- GET /api/entities/{id} — single entity detail with properties
+- GET /api/entities/{id}/timeline — chronological claims for an entity
+- GET /api/entities/{id}/claims — filterable claims by type/status
+- GET /api/graph/{id}/subgraph — 1-2 hop neighborhood (nodes + edges)
+- GET /api/graph/search — cross-type entity search (Person/Org/Deal/Decision)
+- GET /api/evidence/{id} — full evidence detail with source email body
+- GET /api/health — Neo4j + Qdrant connectivity and counts
+- GET /api/conflicts — claims with non-empty conflicts_with
+- GET /api/review-queue — claims needing review (low confidence, conflicts, status=review)
+
+Auth: simplified demo system using X-User-Clearance header mapped to
+CurrentUser objects. Clearance flows into retrieval queries via
+access_level filtering. Production path: replace get_current_user
+dependency with JWT verification (bcrypt + python-jose), no other
+route changes needed.
+
+Lifespan: app startup connects Neo4j, initializes QdrantIndex,
+QueryUnderstanding, and RetrievalEngine; shutdown closes Neo4j driver.
+CORS configured for localhost React dev servers (3000, 5173, 5174).
