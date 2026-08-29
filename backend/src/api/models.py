@@ -65,6 +65,18 @@ class ClarificationInfo(BaseModel):
     message: str
     options: list[ClarificationOption] = Field(default_factory=list)
 
+class CitationItem(BaseModel):
+    """A resolved citation from the chatbot's answer."""
+    marker: str = ""           # "[1]", "[2]", etc.
+    index: int = 0             # the number inside brackets
+    claim_id: str = ""         # which claim this cites
+    claim_type: str = ""       # reports_to, works_with, etc.
+    subject_name: str = ""
+    object_name: str = ""
+    evidence_quote: str = ""   # the verbatim evidence text
+    evidence_id: str = ""      # evidence node ID (for frontend click-through)
+    confidence: float = 0.0
+ 
 
 class EntityProfile(BaseModel):
     """Entity info included in chat response."""
@@ -89,11 +101,13 @@ class RetrievalInfo(BaseModel):
 class ChatResponse(BaseModel):
     """Response body for POST /api/chat."""
     question: str
+    answer: str = ""           # NEW — the generated natural language answer
+    citations: list[CitationItem] = Field(default_factory=list)  # NEW
     claims: list[ClaimResult] = Field(default_factory=list)
     entities: list[EntityProfile] = Field(default_factory=list)
     clarification: Optional[ClarificationInfo] = None
     retrieval_info: RetrievalInfo = Field(default_factory=RetrievalInfo)
-    context_text: str = ""  # formatted text for chatbot (Day 33)
+    context_text: str = ""
 
 
 # ------------------------------------------------------------------ #

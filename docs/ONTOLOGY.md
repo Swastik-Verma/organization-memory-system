@@ -1638,3 +1638,40 @@ route changes needed.
 Lifespan: app startup connects Neo4j, initializes QdrantIndex,
 QueryUnderstanding, and RetrievalEngine; shutdown closes Neo4j driver.
 CORS configured for localhost React dev servers (3000, 5173, 5174).
+
+
+
+## Day 33 — RAG Chatbot
+New module: `backend/src/chatbot/`
+Generates cited natural language answers from retrieved context.
+
+Pipeline: ContextPack → format context as numbered text → system prompt
++ context + question → Gemini → answer with [N] citation markers →
+parse markers → resolve to evidence metadata → ChatbotResponse.
+
+System prompt enforces 7 grounding rules: answer only from context,
+cite every claim, state time periods, explain changes, show both
+sides of conflicts, admit gaps, flag low-confidence claims.
+
+Empty context triggers a canned "no information" response without
+calling the LLM (saves API quota, prevents hallucination).
+
+Unix timestamps from semantic retrieval path converted to ISO dates
+before LLM sees them (fixes Day 31 cosmetic issue).
+
+Citation parser extracts [N] markers via regex, maps each to the
+corresponding claim/evidence metadata, drops invalid markers.
+
+Updated POST /api/chat to include "answer" (generated text) and
+"citations" (resolved evidence references) alongside raw claims.
+
+Clarification handled exclusively via structured clarification field
+(Day 32) — not duplicated in answer text.
+
+Fixed qdrant_index.py semantic_search() to return subject_name,
+object_name, valid_to, status, and mention_count from Qdrant payload
+(fields were written by build_vector_index.py but never read back).
+
+Migrated from gemini-2.5-flash (retired) to gemini-3.6-flash, and
+replaced thinking_budget=0 (Gemini 2.x) with thinking_level="low"
+(Gemini 3.x API change).

@@ -13,6 +13,7 @@ Authentication is simplified for the portfolio demo:
 
 from dataclasses import dataclass
 from typing import Optional
+from src.chatbot.chatbot import Chatbot
 
 from fastapi import Depends, Header, Request
 
@@ -54,6 +55,10 @@ def get_query_understanding(request: Request) -> QueryUnderstanding:
 def get_retrieval_engine(request: Request) -> RetrievalEngine:
     """Get the shared RetrievalEngine from app state."""
     return request.app.state.retrieval_engine
+
+def get_chatbot(request: Request) -> "Chatbot":
+    """Get the shared Chatbot from app state."""
+    return request.app.state.chatbot
 
 
 # ------------------------------------------------------------------ #

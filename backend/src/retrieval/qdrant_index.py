@@ -299,10 +299,15 @@ class QdrantIndex:
                 "claim_id": hit.payload.get("claim_id"),
                 "claim_type": hit.payload.get("claim_type"),
                 "subject_id": hit.payload.get("subject_id"),
+                "subject_name": hit.payload.get("subject_name"),   # ADDED
                 "object_id": hit.payload.get("object_id"),
+                "object_name": hit.payload.get("object_name"),     # ADDED
                 "confidence": hit.payload.get("confidence"),
                 "access_level": hit.payload.get("access_level"),
                 "valid_from": hit.payload.get("valid_from"),
+                "valid_to": hit.payload.get("valid_to"),           # ADDED
+                "status": hit.payload.get("status"),               # ADDED
+                "mention_count": hit.payload.get("mention_count"), # ADDED
                 "message_id": hit.payload.get("message_id"),
             }
             for hit in results.points

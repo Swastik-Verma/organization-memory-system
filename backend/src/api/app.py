@@ -15,6 +15,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from src.chatbot.chatbot import Chatbot
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -90,6 +91,12 @@ async def lifespan(app: FastAPI):
     )
     app.state.retrieval_engine = retrieval_engine
     logger.info("RetrievalEngine initialized")
+
+    # --- Chatbot (Day 33) ---
+    app.state.chatbot = Chatbot(
+        gemini_model=os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
+    )
+    logger.info("Chatbot initialized")
 
     logger.info("All services ready.")
 

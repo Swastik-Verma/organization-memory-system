@@ -766,3 +766,17 @@ python scripts/test_query_understanding.py -i        # interactive mode
 - `scripts/run_server.py`: CLI entry point with --host, --port, --reload
 - Swagger docs at http://localhost:8000/docs
 - Demo auth via X-User-Clearance header (JWT-ready architecture)
+
+
+
+
+### Day 33 — RAG Chatbot
+- `src/chatbot/prompts.py`: system prompt with 7 grounding rules
+- `src/chatbot/chatbot.py`: answer generation with citation parsing
+- Updated `POST /api/chat` to return generated answer + resolved citations
+- Added CitationItem model, get_chatbot dependency, chatbot startup init
+- Empty context returns canned response (no LLM call)
+- Unix timestamp cleanup for LLM-readable dates
+- Fixed semantic_search() to return all payload fields (subject_name,
+  object_name, valid_to, status, mention_count were written but never read)
+- Migrated to gemini-3.6-flash with thinking_level="low" (3.x API)
