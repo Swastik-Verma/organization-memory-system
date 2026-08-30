@@ -780,3 +780,15 @@ python scripts/test_query_understanding.py -i        # interactive mode
 - Fixed semantic_search() to return all payload fields (subject_name,
   object_name, valid_to, status, mention_count were written but never read)
 - Migrated to gemini-3.6-flash with thinking_level="low" (3.x API)
+
+
+
+
+### Day 34 — Multi-turn Conversation
+- `src/chatbot/conversation.py`: ConversationMemory + FollowUpResolver
+- Added FOLLOW_UP_REWRITE_PROMPT to prompts.py
+- Updated chat route with session tracking and follow-up rewriting
+- Added session_id and effective_question to ChatRequest/Response
+- Regex heuristic detects pronouns, temporal fragments, topic continuations
+- LLM rewriter only called when heuristic fires (saves API quota)
+- Bounded 5-turn history window per session

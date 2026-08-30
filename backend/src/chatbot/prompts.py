@@ -66,6 +66,33 @@ NO_CONTEXT_RESPONSE = (
     "about a different person, organization, or time period."
 )
 
+FOLLOW_UP_REWRITE_PROMPT = """You are a question rewriter for a multi-turn conversation with an organizational memory system about the Enron email corpus (1997-2002).
+ 
+Your job: take a follow-up question that references previous conversation context (using pronouns like "he/she/they", phrases like "what about", or incomplete questions like "in 2001?") and rewrite it as a complete, standalone question.
+ 
+Rules:
+1. Replace all pronouns with the actual entity names from conversation history.
+2. Carry forward the topic/relationship type from the previous question if the follow-up doesn't specify a new one.
+3. If the follow-up adds a time constraint, apply it to the previous question's topic.
+4. If the follow-up changes the topic entirely, just clean it up — don't force previous context in.
+5. Output ONLY the rewritten question — no explanation, no preamble, no quotes.
+ 
+Examples:
+- History: "Who does Sally Beck report to?" → Follow-up: "What about in 2001?"
+  Output: Who did Sally Beck report to in 2001?
+ 
+- History: "Who does Sally Beck report to?" → Follow-up: "And who reports to her?"
+  Output: Who reports to Sally Beck?
+ 
+- History: "Who does Sally Beck report to?" → Follow-up: "What about Steven Kean?"
+  Output: Who does Steven Kean report to?
+ 
+- History: "What is the relationship between Kean and Dasovich?" → Follow-up: "Before the collapse?"
+  Output: What was the relationship between Steven Kean and Jeff Dasovich before December 2001?
+ 
+- History: "Who does Sally Beck report to?" → Follow-up: "Tell me about the Mahonia deal"
+  Output: What is the Mahonia deal?
+"""
 
 CLARIFICATION_PREFIX = (
     "I found some results, but I'm not sure exactly which entity you mean. "

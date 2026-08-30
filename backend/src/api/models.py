@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     """Request body for POST /api/chat."""
     question: str = Field(..., min_length=1, description="Natural language question")
+    session_id: Optional[str] = Field(default=None, description="Conversation session ID for multi-turn")
 
 
 class EvidenceItem(BaseModel):
@@ -101,6 +102,7 @@ class RetrievalInfo(BaseModel):
 class ChatResponse(BaseModel):
     """Response body for POST /api/chat."""
     question: str
+    effective_question: Optional[str] = None   # ADD — the rewritten question, if follow-up was detected
     answer: str = ""           # NEW — the generated natural language answer
     citations: list[CitationItem] = Field(default_factory=list)  # NEW
     claims: list[ClaimResult] = Field(default_factory=list)
@@ -108,6 +110,7 @@ class ChatResponse(BaseModel):
     clarification: Optional[ClarificationInfo] = None
     retrieval_info: RetrievalInfo = Field(default_factory=RetrievalInfo)
     context_text: str = ""
+    session_id: Optional[str] = None           # ADD — return session_id so frontend can send it back
 
 
 # ------------------------------------------------------------------ #

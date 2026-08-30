@@ -14,6 +14,7 @@ Authentication is simplified for the portfolio demo:
 from dataclasses import dataclass
 from typing import Optional
 from src.chatbot.chatbot import Chatbot
+from src.chatbot.conversation import ConversationMemory, FollowUpResolver
 
 from fastapi import Depends, Header, Request
 
@@ -59,6 +60,15 @@ def get_retrieval_engine(request: Request) -> RetrievalEngine:
 def get_chatbot(request: Request) -> "Chatbot":
     """Get the shared Chatbot from app state."""
     return request.app.state.chatbot
+
+def get_conversation_memory(request: Request) -> ConversationMemory:
+    \"\"\"Get the shared ConversationMemory from app state.\"\"\"
+    return request.app.state.conversation_memory
+
+def get_follow_up_resolver(request: Request) -> FollowUpResolver:
+    \"\"\"Get the shared FollowUpResolver from app state.\"\"\"
+    return request.app.state.follow_up_resolver
+
 
 
 # ------------------------------------------------------------------ #

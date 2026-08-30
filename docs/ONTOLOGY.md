@@ -1675,3 +1675,29 @@ object_name, valid_to, status, and mention_count from Qdrant payload
 Migrated from gemini-2.5-flash (retired) to gemini-3.6-flash, and
 replaced thinking_budget=0 (Gemini 2.x) with thinking_level="low"
 (Gemini 3.x API change).
+
+
+
+## Day 34 — Multi-turn Conversation
+New module: `backend/src/chatbot/conversation.py`
+Adds conversational memory and follow-up question resolution.
+
+ConversationMemory stores the last 5 question-answer pairs per session
+in a bounded window. Sessions are identified by UUID, stored in-memory
+(production: Redis with TTL expiry).
+
+Follow-up detection uses a regex heuristic to check for pronouns,
+"what about" openers, and short temporal fragments. Only fires when
+conversation history exists — no false positives on first turn.
+
+FollowUpResolver rewrites follow-ups into standalone questions via
+gemini-3.1-flash-lite. "What about in 2001?" becomes "Who did Sally
+Beck report to in 2001?" using conversation history and recent entity
+names as context. Original question preserved alongside rewrite.
+
+Rewriting is a preprocessing step — the retrieval engine and chatbot
+are unchanged. The rewritten question flows through the existing
+parse → retrieve → generate pipeline.
+
+Updated POST /api/chat to accept session_id for multi-turn tracking
+and return effective_question when a follow-up was rewritten.

@@ -16,6 +16,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from src.chatbot.chatbot import Chatbot
+from src.chatbot.conversation import ConversationMemory, FollowUpResolver
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -97,6 +98,15 @@ async def lifespan(app: FastAPI):
         gemini_model=os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
     )
     logger.info("Chatbot initialized")
+
+    # --- Conversation memory (Day 34) ---
+    app.state.conversation_memory = ConversationMemory(max_turns=5)
+    logger.info("ConversationMemory initialized")
+
+    app.state.follow_up_resolver = FollowUpResolver(
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+    )
+    logger.info("FollowUpResolver initialized")
 
     logger.info("All services ready.")
 
