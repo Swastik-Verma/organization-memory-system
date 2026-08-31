@@ -792,3 +792,19 @@ python scripts/test_query_understanding.py -i        # interactive mode
 - Regex heuristic detects pronouns, temporal fragments, topic continuations
 - LLM rewriter only called when heuristic fires (saves API quota)
 - Bounded 5-turn history window per session
+
+
+### Frontend
+
+React + Vite + TypeScript application in `frontend/`.
+
+**Tech stack:** Tailwind CSS, shadcn/ui, react-router-dom
+
+**Run the dev server:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**Pages:** Chat, Graph Explorer, Entities, Entity Detail, Evidence, Health Dashboard, Conflict Review, Merge Audit Log
