@@ -1,13 +1,14 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 
-// Chat needs the full height of <main> for its own internal scroll region
-// (message list) plus a bottom-pinned input — the standard padded/page-scroll
-// wrapper used by every other page would break that. So this route opts out
-// of the wrapper instead of scrolling at the page level.
+// Chat and the graph explorer both need the full height of <main> for their own
+// content — chat for its internal scroll region plus bottom-pinned input, the graph
+// explorer for its canvas, which needs to fill its container rather than sit inside a
+// scrolling page. The standard padded/page-scroll wrapper used by every other page
+// would break both, so these routes opt out of it.
 export function MainLayout() {
   const { pathname } = useLocation()
-  const isFullBleed = pathname.startsWith('/chat')
+  const isFullBleed = pathname.startsWith('/chat') || pathname.startsWith('/graph')
 
   return (
     <div className="flex h-svh overflow-hidden bg-background text-foreground">
