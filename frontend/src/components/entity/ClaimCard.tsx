@@ -79,7 +79,12 @@ export function ClaimCard({ claim, currentEntityId }: ClaimCardProps) {
       </div>
 
       {sourceCount > 0 ? (
-        <Link to={`/evidence/${encodeURIComponent(claim.evidence_ids[0])}`} className="text-xs font-medium text-primary hover:underline">
+        <Link
+          to={`/evidence/${encodeURIComponent(claim.evidence_ids[0])}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-medium text-primary hover:underline"
+        >
           View evidence &rarr;
         </Link>
       ) : (

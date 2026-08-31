@@ -865,3 +865,158 @@ graphMocks.ts had disagreeing source/claim counts. Reconciled graphMocks.ts's
 edge claim_count values to entityMocks.ts's evidence_ids as ground truth, and
 added a dev-time cross-file consistency check to catch future drift.
 ```
+
+---
+
+## Day 40 — Evidence Detail Page
+
+### What was built
+
+Replaced the Day 36 `/evidence/:id` placeholder with a full evidence detail page showing
+the "trust chain": claim → extracted quote → source email, built entirely against mock
+data (no calls to the real `/api/evidence/{id}` — that's Day 41).
+
+**Pre-task fix applied first, per the brief:** the two existing "View evidence" links —
+`EvidenceDrawer.tsx` (Day 37) and `ClaimCard.tsx` (Day 39) — now open `/evidence/:id` in a
+new tab (`target="_blank" rel="noopener noreferrer"`), so drilling into evidence no longer
+loses chat/graph/entity page state. Grepped the whole codebase for any other route to
+`/evidence/*` first (per the standing "fix the whole class, not just the reported
+instance" rule) — confirmed these were the only two.
+
+**Types** (`src/types/evidence.ts`) — mirrors `backend/src/api/models.py`'s
+`EvidenceDetailResponse` field-for-field, same approach as every prior day's type file.
+The real field is `quote`, not `evidence_quote` as the brief's example JSON shows — kept
+as `quote` to match the backend model (chat.ts made the same call on Day 37). Real fields
+the UI doesn't need today (`message_id`, `char_start`, `char_end`, `evidence_verified`)
+are omitted with a comment, same as chat.ts omitting `claims`/`entities`/`retrieval_info`/
+`context_text`. Mock-only additions, flagged in the header: `subject_id`/`object_id` (the
+real model has only names, no ids — needed for the claim section's entity links),
+`status`/`valid_from`/`valid_to` (these live on the Claim node in the real schema, not the
+Evidence node — confirmed by reading the Cypher query in
+`backend/src/api/routes/evidence.py`, which never selects them), and `email_to` (real
+model has only a single `email_from`).
+
+**Mock layer** (`src/mocks/evidenceMocks.ts`) — two tiers:
+- **5 hand-authored "showcase" fixtures** covering the required states: `evidence_2210`
+  (happy path, matches the brief's own example exactly — confidence 0.85, 2 recipients),
+  `evidence_3390` (genuinely empty quote, sourced from chatMocks.ts's real
+  `EMPTY_QUOTE_RESPONSE`), `evidence_1980` (22-line negotiation-update email), `evidence_1750`
+  (status `superseded` with a non-null `valid_to`), `evidence_2260` (4 recipients).
+- **33 "filler" fixtures** generated from a transcribed table of every other evidence_id
+  referenced by `chatMocks.ts` citations or `entityMocks.ts` claims (38 distinct ids total
+  across both files), so every citation badge and "View evidence" link already built on
+  Days 37/39 resolves to a real mock instead of 404ing. `chatMocks.ts`-sourced fillers keep
+  their real quote text; `entityMocks.ts`-sourced fillers have no quote text at all in the
+  source file (`ClaimResult` only carries evidence_id strings), so one is synthesized from a
+  small claim-type-keyed template (e.g. `works_with` → "X has been working closely with Y on
+  this.") and embedded into a shared boilerplate email body. Neither source file exports its
+  raw fixture arrays, and this session isn't scoped to add exports to Day 37/39 files, so the
+  transcribed table is duplicated literals — same accepted risk entityMocks.ts's own header
+  already documents for its 14 ids copied from graphMocks.ts.
+- `mockFetchEvidence(id)` — ~300ms delay, throws on an unmapped id (same throw/catch idiom
+  as `mockFetchEntityDetail`).
+- `validateEvidenceMockIntegrity()` (dev-only, same pattern as Days 38-39's checkers) flags
+  a duplicate evidence_id across the two tiers, and — more usefully — flags any non-empty
+  `quote` that doesn't appear verbatim in its own `email_body`. **This caught a real bug
+  before it shipped**: the `evidence_1750` (superseded) fixture's quote ended in a period
+  but the email body had it followed by a comma ("…targeting," vs "…targeting."), so the
+  brief's required `email_body.includes(quote)` highlighting would have silently failed for
+  that one fixture. Fixed by rewording the body sentence to end cleanly.
+
+**A real pre-existing cross-file data conflict was found while transcribing this table, not
+introduced today:** `evidence_2211` is entityMocks.ts's second evidence_id for claim_001
+(Sally Beck `reports_to` John Lavorato), but chatMocks.ts's own citation for the identical
+evidence_id is a different claim entirely (Sally Beck `works_with` Louise Kitchen, claim
+`claim_8842`, with real quote text). A real evidence node belongs to exactly one claim, so
+the mock can't honor both. chatMocks.ts's version was kept as authoritative (it's the only
+one of the two with real quote text) and the conflict is documented in
+`evidenceMocks.ts`'s header comment and asserted in this session's verification (see
+below) rather than silently resolved — per CLAUDE.md §5's "ask before deciding," this is
+flagged here rather than picked silently. **Not user-visible today**: `ClaimCard.tsx` only
+ever links to `evidence_ids[0]`, never `[1]`, so `evidence_2211` is only reachable via
+chatMocks' own citation badge today, which agrees with itself. Worth a look before Day 41
+if evidence_ids beyond `[0]` ever become clickable, or if the backend's real evidence graph
+is used to sanity-check these mocks.
+
+**Components** (`src/components/evidence/`):
+- `ClaimSection.tsx` — claim-type badge, status badge, subject → object as `target="_blank"`
+  links to `/entities/:id` (this page is itself usually opened in a new tab already, so a
+  further click here shouldn't lose that tab too), a confidence bar, valid-from/valid-to
+  (`null` valid_to renders "Present", matching `ClaimCard.tsx`'s Day 39 convention).
+- `EvidenceQuote.tsx` — the quote in a prominent blockquote, or the brief's specified
+  fallback line when empty.
+- `SourceEmail.tsx` — From/To/Date/Subject header block, then the full `email_body` in a
+  `<pre className="whitespace-pre-wrap break-words font-mono">` block (wraps instead of
+  causing horizontal scroll, per the brief's responsive requirement) inside its own
+  `max-h-[32rem] overflow-y-auto` region. Highlighting is a plain `body.split(quote)` with
+  the matched segment wrapped in `<mark>` — simple substring match per the brief, no
+  char-offset math.
+- `pages/EvidencePage.tsx` — loading skeleton (shadcn `Skeleton`, same as
+  `EntityDetailPage.tsx`) while the mock's ~300ms delay is in flight, not-found state with a
+  link to `/entities`, and the exact `window.history.length > 1 ? navigate(-1) :
+  navigate('/entities')` back-link pattern the brief specifies. No `MainLayout.tsx` change
+  needed — `/evidence` was never added to the full-bleed route list, so it already gets the
+  standard padded/page-scroll wrapper, which is what a document-like page wants.
+
+### Verification
+
+Same standing constraint as every prior day: no real browser available in this environment
+(Playwright needs `libnspr4`/`libnss3`, no `sudo`). Used the same ephemeral
+vitest+jsdom+`@testing-library/react`/`user-event`+`jest-dom` install as Days 36-39
+(`--no-save`; `package.json`/`package-lock.json` md5s confirmed byte-identical before and
+after, both packages fully removed afterward). Two ephemeral test files, deleted after:
+
+1. **Data-layer checks (10/10 passed)**: `validateEvidenceMockIntegrity()` reports 0
+   problems; exactly 38 distinct evidence_ids are referenced across chatMocks.ts +
+   entityMocks.ts and every one resolves via `mockFetchEvidence` with a non-empty
+   subject/object/claim_type/email_body and a confidence in [0,1]; an unknown id throws;
+   each of the 5 showcase fixtures independently verified against its required property
+   (evidence_2210's confidence/ids/recipient-count match the brief's own example exactly;
+   evidence_3390's quote is genuinely `''`; evidence_1980 has 22 lines; evidence_1750 is
+   `superseded` with a non-null `valid_to`; evidence_2260 has 4 recipients); the
+   evidence_2211 conflict resolves to the documented (chatMocks) side.
+2. **Real DOM render checks on the actual `EvidencePage` component (6/6 passed)**, wrapped
+   in a `MemoryRouter`: skeleton renders before data arrives, then claim/quote/email
+   sections render with correct badge text and a 85% confidence bar; the quote appears
+   exactly twice (once in the blockquote, once as a single `<mark>` inside the email body —
+   confirming the highlighting logic actually fires, not just that the text is present
+   somewhere); the empty-quote fixture shows the fallback line and renders zero `<mark>`
+   elements; an unknown id shows "was not found" with a working link to `/entities`; the
+   claim section's subject link has the correct URL-encoded `href`,
+   `target="_blank"`, and `rel="noopener noreferrer"`; the superseded fixture shows the
+   "Superseded" badge and its `valid_to` date instead of "Present"; the multi-recipient
+   fixture's four addresses all render.
+
+`tsc -b`, `oxlint` (clean except the same pre-existing/already-accepted warning categories
+as Days 36-39 — the new `react(set-state-in-effect)` hit on `EvidencePage.tsx`'s
+fetch-on-id-change effect is the identical, already-documented pattern from
+`EntityDetailPage.tsx`/`ClaimsTab.tsx`/etc.), and `npm run build` all clean.
+
+**Not done:** an actual pixel/visual check in a real browser window — same standing gap as
+every prior day.
+
+### Not done / deferred
+
+- Real `/api/evidence/{id}` integration — Day 41 by design.
+- Evidence editing/annotation — explicitly out of scope per the brief.
+- Side-by-side (claim-left/email-right) layout — brief explicitly asks for the simpler
+  vertical stack.
+- Char-offset-based highlighting (`char_start`/`char_end`) — the brief specifies simple
+  `email_body.includes(quote)` string matching instead; char_start/char_end aren't even
+  carried in `src/types/evidence.ts` since nothing uses them (see that file's header
+  comment for the "real field but UI doesn't need it" fields).
+
+### Suggested commit message
+
+```
+Day 40: evidence detail page — claim/quote/source-email trust chain view,
+mock evidence data layer covering every evidence_id referenced by the Day 37
+chat and Day 39 entity mocks, evidence links now open in a new tab
+
+Dev-time integrity check caught a real bug pre-ship: the superseded showcase
+fixture's quote didn't match its email body verbatim (trailing punctuation),
+which would have silently broken the required inline highlighting. Also
+surfaces (but does not silently resolve) a pre-existing data conflict where
+chatMocks.ts and entityMocks.ts disagree about what claim evidence_2211
+belongs to — not user-visible today, flagged for Day 41.
+```

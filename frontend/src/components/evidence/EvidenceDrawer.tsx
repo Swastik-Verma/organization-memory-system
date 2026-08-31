@@ -86,6 +86,8 @@ export function EvidenceDrawer({ citation, open, onOpenChange }: EvidenceDrawerP
 
             <Link
               to={`/evidence/${citation.evidence_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-sm font-medium text-primary hover:underline"
             >
               View full evidence &rarr;
