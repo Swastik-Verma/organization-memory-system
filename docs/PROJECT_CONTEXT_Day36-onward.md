@@ -581,3 +581,287 @@ Fix stuck hover tooltip: the engine-tick handler re-asserted hover state from a
 stale closure, so clearing it never stuck. Split identity from position into a
 testable tooltip controller; add background-click-to-dismiss.
 ```
+
+---
+
+## Day 39 — Entity List and Entity Detail Pages
+
+### What was built
+
+Replaced the Day 36 `/entities` and `/entities/:id` placeholders with real, fully
+functional pages, built entirely against mock data (no calls to the real
+`/api/entities/*` — that's Day 41).
+
+**Installed:** shadcn's `tabs` primitive (`npx shadcn add tabs`), built on
+`@base-ui/react/tabs` — same pattern as every other shadcn component in this app. No new
+npm dependencies (base-ui and cva were already installed); `package.json`/
+`package-lock.json` are unchanged.
+
+**Types** (`src/types/entity.ts`) — mirrors `backend/src/api/models.py`'s Entity section
+field-for-field (`EntityListItem`, `EntityListResponse`, `EntityDetailResponse`,
+`ClaimResult`, `EntityClaimsResponse`, `TimelineEvent`, `EntityTimelineResponse`), same
+approach as Day 37's `chat.ts` and Day 38's `graph.ts`. Mock-only additions, each flagged
+in the file's header comment:
+- `EntityListItem.claim_count` and `EntityDetailResponse.claim_count`/`first_seen`/
+  `last_seen` — none of these exist on the real models.
+- `ClaimResult.evidence_ids` — the real model has a generic `evidence: list[dict]`
+  instead. The brief's `source_count` field is deliberately **not** stored separately —
+  it's computed as `evidence_ids.length` wherever shown, so there's one number instead of
+  two that could drift apart.
+
+**Mock layer** (`src/mocks/entityMocks.ts`) — 20 entities across all 4 types, 22 claims
+covering all 5 claim types (confidence 0.40–0.93, includes both `superseded` and `review`
+statuses). Built with the same "single canonical source of truth" architecture Day 38 had
+to retrofit after a real bug (see that day's "mock data identity bug" post-session fix):
+- **14 of the 20 entities reuse the exact same ids** as `graphMocks.ts`'s registry (Sally
+  Beck, Enron America, the Global Crossing deal, etc.) — copied as literal strings rather
+  than imported, since `graphMocks.ts` doesn't export its constants and is a Day 38 file
+  this session must not modify. This means the Graph Explorer's double-click navigation
+  and this page's own Relationships tab (which calls `graphMocks.mockFetchSubgraph`
+  directly) land on the same entity identity as everywhere else — not a disconnected mock
+  universe. **Risk flagged in the file's own header comment:** if `graphMocks.ts`'s
+  registry ever changes, these copied strings must be updated by hand — nothing catches
+  that drift automatically since the files don't share code.
+- **Claims are declared once**, in a single `CLAIMS` array, each built via a `claim()`
+  helper that looks up `subject_name`/`object_name` from the entity registry rather than
+  accepting them as literals — the same fix Day 38 applied to `graphMocks.ts` after
+  finding that hand-typed names next to hand-typed ids can silently drift apart.
+  `mockFetchEntityClaims`/`mockFetchEntityTimeline` both *filter* this one array
+  (`subject_id === id || object_id === id`), exactly mirroring the real Cypher query in
+  `backend/src/api/routes/entities.py` — a claim was never duplicated into two entities'
+  hand-authored claim lists, so there's no way for the same fact to read differently from
+  its two ends.
+- **6 new standalone entities** (Jeffrey McMahon, Greg Whalley, Arthur Andersen, Enron
+  Broadband Services, EOTT Energy Restructuring, Freeze 401(k) Trading Window) exist only
+  to round the list out to 20 for pagination and to exercise the "zero claims" / "no known
+  relationships" empty states — none of them have a `graphMocks.ts` fixture, so their
+  Relationships tab honestly falls through to that file's no-fabrication fallback (center
+  node only, no edges) rather than inventing neighbours.
+- `validateEntityMockIntegrity()` (exported, auto-run under `import.meta.env.DEV` with
+  `console.error`, same pattern as `graphMocks.ts`) checks: no two entities share a name;
+  every claim's `subject_id`/`object_id` resolves to a registered entity; every claim's
+  `subject_name`/`object_name` matches the registry (catches exactly the class of bug Day
+  38 hit); every `claim_type` is one of the 5 valid types; confidence is in `[0, 1]`.
+
+**Small additive changes to Day 36 lib files** (existing exports untouched, only new
+exports added, so nothing that already imports these files changes behavior):
+- `src/lib/entityTypes.ts` — added `ENTITY_TYPE_BADGE_CLASSES` / `entityTypeBadgeClass()`,
+  static Tailwind classes (`bg-entity-person/10 text-entity-person`, etc.) for the pill
+  badges used throughout today's pages. Static strings, not built from a template — a
+  dynamically-constructed class name (e.g. `` `bg-entity-${type}` ``) wouldn't survive
+  Tailwind v4's JIT scanner.
+- `src/lib/claimTypes.ts` — added `CLAIM_STATUS_COLORS` / `claimStatusColor()` /
+  `claimStatusLabel()` for the claim status pill (`active`/`superseded`/`review`), kept
+  separate from the existing claim-*type* color map since status and type are different
+  closed vocabularies.
+
+**Components** (`src/components/entity/`):
+- `EntityTypeBadge.tsx` — small colored pill, used on both pages and the Relationships tab.
+- `EntityCard.tsx` — one row on the list page; the whole row is a `Link` to
+  `/entities/{encodeURIComponent(id)}`.
+- `EntityHeader.tsx` — detail page header: name, type badge, aliases (only rendered when
+  non-empty), mention/claim counts, first/last seen, back-to-list link.
+- `ClaimCard.tsx` — one claim: type badge, status badge, subject → object (the side that
+  isn't the current entity is a clickable `Link`, the current entity's own name renders
+  as plain text), a confidence bar, valid-from/valid-to (`null` valid_to renders as
+  "Present"), and a "View evidence" link to `/evidence/{first evidence_id}` — or, when
+  `evidence_ids` is empty, a graceful "No supporting evidence indexed yet." message
+  instead of a dead link (mirrors the CLAUDE.md §8.3 empty-quote handling from Day 37's
+  evidence drawer).
+- `ClaimsTab.tsx` — claim-type filter chips (colored via the existing `claimTypeColor`),
+  a Confidence/Date sort toggle (confidence descending is the default, matching the real
+  endpoint's `ORDER BY c.confidence DESC`), loading skeleton, empty state.
+- `TimelineTab.tsx` — vertical timeline, oldest-first (matches the real endpoint's
+  `ORDER BY c.valid_from ASC`), a connector line via a single `border-l` div with an
+  absolutely-positioned dot per entry rather than one border per row.
+- `RelationshipsTab.tsx` — calls `graphMocks.mockFetchSubgraph(entityId, 1)` directly and
+  renders the edges that touch the *current* entity as a flat list (filtered to
+  `edge.source === entityId || edge.target === entityId`, since a fixture can contain
+  edges between two of its *other* nodes — e.g. the Global Crossing deal fixture also
+  contains a Zufferli↔Global Crossing Ltd edge that has nothing to do with the deal
+  itself). Each row shows the connected entity (type badge + link), the relationship type,
+  and `edge.claim_count` (the Day 38 mock-only field). Ends with a "View in Graph
+  Explorer" link to `/graph` (styled via `buttonVariants` directly rather than wrapping a
+  shadcn `Button`, since `@base-ui/react/button` takes a `render` prop, not shadcn's usual
+  `asChild`, and a styled `Link` is simpler than threading that through).
+
+**Pages:**
+- `EntitiesPage.tsx` — type filter chips (All + 4 types) and a search input, both
+  client-side against the mock (`mockFetchEntities` itself still takes `type`/`search`/
+  `skip`/`limit` params and does the filtering, so the call shape matches the real
+  endpoint even though today's data source is local). Page size 10. Changing the filter or
+  search resets to page 1 — done by resetting `skip` in the *same* handler that changes
+  the filter/search state, not in a separate `useEffect` watching them, specifically to
+  avoid firing the fetch effect twice (once with a stale page number, once corrected) on
+  every filter change.
+- `EntityDetailPage.tsx` — reads `id` via `useParams()` and `decodeURIComponent()`s it
+  (matching the `encodeURIComponent()` used everywhere a link to this route is built —
+  Day 38's graph canvas double-click, today's `EntityCard`/`ClaimCard`/`RelationshipsTab`
+  links). Not-found state (a thrown `Error` from `mockFetchEntityDetail` for an
+  unregistered id) renders "Entity was not found" rather than crashing. shadcn `Tabs`
+  defaulting to the Claims tab.
+
+### Gotchas for future sessions
+
+- **Real backend gap that will surface on Day 41, found while reading
+  `backend/src/api/routes/entities.py` to build these mocks:** `GET /api/entities` only
+  ever matches `(n:Person) OR (n:Organization)` — the `entity_type` query param maps
+  `"person"`/`"organization"` to a label filter, and the "no filter" branch is hardcoded to
+  `WHERE (n:Person OR n:Organization)` too. **Deal and Decision nodes are not reachable
+  through this endpoint at all**, regardless of what filter is passed. `GET
+  /api/entities/{id}` has the identical restriction (`WHERE ... (n:Person OR
+  n:Organization)`), so a Deal or Decision id 404s there as well. Today's mocks support all
+  4 types because the Day 39 brief explicitly asks for Deal/Decision in the type filter and
+  in the 4 detailed profiles — but this means the "Deal" and "Decision" filter chips, and
+  two of today's four detailed profiles (Global Crossing Transaction, August 2001
+  Reorganization), have **no real backend equivalent to integrate against on Day 41** as
+  the routes currently stand. This isn't something fixable from the frontend — flag it at
+  the start of Day 41 rather than rediscovering it mid-session; the options are asking for
+  a backend change to these two routes, or scoping the real `/entities` page down to
+  Person/Organization only until that happens.
+- The 14 shared ids between `entityMocks.ts` and `graphMocks.ts` are duplicated string
+  literals, not an import — see the mock layer note above. A future edit to one file's
+  registry (e.g. renaming an entity, or changing an id's slug) must be mirrored in the
+  other by hand; nothing in either file's integrity check can catch that drift since
+  neither imports the other.
+- **New oxlint warning category, not seen in Days 36–38:** `react(set-state-in-effect)` on
+  the 5 places that reset a piece of state to `null` at the top of a data-fetching
+  `useEffect` (`EntitiesPage`, `EntityDetailPage`, `ClaimsTab`, `TimelineTab`,
+  `RelationshipsTab`) before kicking off the mock fetch — this is what drives the loading
+  skeleton for the *new* key (entity id, or a changed claim-type filter) instead of
+  flashing the *previous* key's stale data. Investigated and left as-is: this is the
+  standard "reset-then-fetch" shape for an async effect keyed on a changing id/filter, and
+  the warning's suggested alternative ("derive during render") doesn't apply to data that
+  only exists after an async call resolves. Treated the same way Days 36–38 treated the
+  pre-existing shadcn-generated warnings (documented, not "fixed" by contorting the code
+  around a lint heuristic that doesn't fit this case).
+- Installing `shadcn add tabs` added a 3rd pre-existing-shadcn-generated oxlint warning
+  (`tabs.tsx`'s `only-export-components`) alongside Day 36/37's `button.tsx`/`badge.tsx`
+  ones — same category, not app code, not addressed for the same reason those weren't.
+- `@base-ui/react/button` (shadcn's `Button`) takes a `render` prop, not the Radix-style
+  `asChild` that shadcn docs/examples elsewhere sometimes assume. `Button asChild` silently
+  doesn't type-check the way you'd expect from a Radix-based shadcn app. The
+  "button-styled-Link" need in `RelationshipsTab.tsx` was solved by importing
+  `buttonVariants` and applying it directly to the `Link`'s `className` instead.
+
+### Verification
+
+Same standing constraint as Days 36–38: no real browser available in this environment
+(Playwright needs `libnspr4`/`libnss3`, no `sudo` to install them). All of today's UI is
+plain DOM (no canvas), so — like Days 36–37 — real DOM verification was done via an
+ephemeral `vitest` + `jsdom` + `@testing-library/react`/`user-event` install (`--no-save`,
+fully removed afterward; `package.json`/`package-lock.json` md5s confirmed byte-identical
+before and after). 15/15 checks passed, including: entity list sorted by mention_count
+with correct pagination math (20 entities, page size 10 → "Page 1 of 2"); type-filter chips
+narrow the list and hide pagination when the filtered set fits one page; search filters and
+shows the empty state on no matches; clicking an entity card navigates to its detail page
+with the URL-encoded id round-tripping correctly through `decodeURIComponent`; the detail
+header renders name/aliases/claim count; the Claims tab defaults to confidence-descending
+order, filters by claim type, and shows both `Active`/`Superseded` status badges and the
+graceful "No supporting evidence indexed yet." state on a claim with no evidence; clicking
+a claim's counterpart entity name navigates to *that* entity's own detail page; the
+Timeline tab renders oldest-first; the Relationships tab renders `graphMocks` edge data
+with a working `/graph` link; an unknown id shows the not-found state; and an entity with
+no `graphMocks` fixture / no claims shows the relationships/claims empty states rather than
+fabricated data. Also ran `validateEntityMockIntegrity()` itself as a unit check (0
+problems). `tsc -b`, `oxlint` (clean except the pre-existing/new-but-accepted warnings
+above), and `npm run build` all clean.
+
+**Not done:** an actual pixel/visual check in a real browser window — same standing gap as
+every prior day.
+
+### Not done / deferred
+
+- Real `/api/entities/*` integration — Day 41 by design.
+- Entity editing, merging, deletion UI — explicitly out of scope per the brief.
+- A mini graph inside the Relationships tab — it's a flat text list by design, per the
+  brief's scope boundaries; the full graph lives at `/graph`.
+- Cross-linking from the Day 37 chat/evidence-drawer components to entity pages — the
+  brief explicitly says not to touch Day 37 chat components today; that link-up is Day 41
+  by design.
+- Debouncing the search input — every keystroke re-runs the mock filter (with its
+  ~200–400ms artificial delay) rather than waiting for the user to pause typing. Not
+  addressed today since the brief only asked for client-side filtering of the mock list;
+  worth a look once the real endpoint's actual network latency is in the loop on Day 41.
+
+### Post-session fix: Relationships tab mislabel, then a real cross-file count bug
+
+Two rounds of user feedback after the day's initial build:
+
+**Round 1 — mislabel.** The Relationships tab showed "Works With · 5 claims" next to each
+connected entity. The number is `edge.claim_count` from `graphMocks.ts` — the count of
+evidence sources backing that one merged relationship, the same concept as "Sources: 5" on
+the Claims tab, not a count of separate claims. Relabeled to "5 sources" in
+`RelationshipsTab.tsx`. Checked whether `EntityCard.tsx`/`EntityHeader.tsx`'s "X claims"
+labels had the same problem — they don't: those read `entity.claim_count` from
+`EntityDetailResponse`/`EntityListItem`, a genuinely different field (the entity's total
+distinct-claim count), so they were left as-is.
+
+**Round 2 — the numbers themselves disagreed.** The user then noticed the Kenneth Lay ↔
+Enron America "Works With" relationship showed 2 sources on the Claims tab but 5 on the
+Relationships tab for what should be the same underlying claim, and asked for a full audit
+of every relationship shared between `entityMocks.ts` and `graphMocks.ts`, not just this
+one instance.
+
+Audited all 22 `CLAIMS` entries against all `graphMocks.ts` edges by matching on
+`(subject_id, claim_type, object_id)`. Found **14 shared relationships** where the two
+files' counts disagreed (entityMocks' `evidence_ids.length` vs. graphMocks'
+`claim_count`), out of the pairs that exist in both files — most graph edges have no
+entityMocks counterpart at all (different entity pairs entirely, e.g. Louise Kitchen
+`reports_to` Kenneth Lay only exists in `graphMocks.ts`) and were correctly left alone, since
+the user's ask was about relationships that appear in *both* files, not full topological
+parity between them. 2 pairs (Enron Legal `requests_from` the Global Crossing deal;
+Approve-GC-Deal `informs` the Global Crossing deal) already agreed and needed no change.
+
+**Which file to treat as authoritative:** `entityMocks.ts`'s `evidence_ids` are lists of
+specific (mock) evidence-id strings — the more granular, detailed representation. `graphMocks.ts`'s
+`claim_count` was, per the Day 38 log, invented purely to drive edge-thickness on the
+canvas, with no backing detail. Chose to treat `evidence_ids.length` as ground truth and
+corrected `graphMocks.ts`'s 14 edge `claim_count` values to match, rather than inventing new
+evidence-id strings to inflate entityMocks up to graphMocks' arbitrary numbers. Each of the
+14 corrected values was updated everywhere it's duplicated across fixtures (several of
+these edges are intentionally drawn from both entities' subgraphs, per `graphMocks.ts`'s own
+header comment about exercising the merge/dedup path) — used `replace_all` on the exact
+`edge(...)` call text specifically so every duplicate copy got the same fix in one pass,
+rather than risking only fixing the copy the bug report happened to point at.
+
+**Added a regression guard** (`validateGraphClaimConsistency()` in `entityMocks.ts`,
+run under `import.meta.env.DEV` alongside the existing `validateEntityMockIntegrity()`):
+calls `graphMocks.mockFetchSubgraph()` (graphMocks.ts's own public export — nothing reaches
+into that file's internals) for every entity id referenced anywhere in `CLAIMS`, and cross-checks
+every claim's evidence count against the matching edge's `claim_count`. **Verification
+caught a real gap in the first version of this checker**: a plain last-write-wins `Map`
+recording one `claim_count` per edge key missed the case where *graphMocks' own two copies
+of the same edge* disagree with each other (reintroducing the original bug in only one of
+Kenneth Lay's/Enron America's two fixture copies still passed, because whichever fixture
+happened to be queried last still held the correct value, purely by luck of iteration
+order). Fixed by recording every observed value per edge key in a `Set` instead of
+overwriting, so the checker flags both failure modes: graphMocks disagreeing with itself
+across fixtures, and graphMocks agreeing with itself but disagreeing with entityMocks.
+Verified both cases explicitly by temporarily reintroducing each one (an ephemeral
+`tsx` script, removed after — `package.json`/`package-lock.json` md5s confirmed unchanged)
+and confirming the checker caught each, then confirming it reports 0 problems on the
+corrected data.
+
+**Lesson for future days**, consistent with the one already recorded for Day 38's mock
+identity bug: two independently-hand-authored mock files describing overlapping facts is a
+standing source of exactly this bug class. The `entityMocks.ts` header comment already
+flagged the *id-string* duplication risk between the two files; this add-on check narrows
+the remaining gap by catching *count* drift automatically, though it still can't catch a
+future edit that changes an id string in one file without the other (that would just make
+the two files stop describing the same entity at all, which is a different, still-unguarded
+risk noted in the same header comment).
+
+### Suggested commit message
+
+```
+Day 39: entity list and detail pages — filterable/searchable entity browser,
+tabbed Claims/Timeline/Relationships profile view, mock data layer shared with
+the Day 38 graph explorer's entity identities
+
+Fix Relationships tab mislabel ("X claims" -> "X sources") and a real
+cross-file data bug: 14 relationships shared between entityMocks.ts and
+graphMocks.ts had disagreeing source/claim counts. Reconciled graphMocks.ts's
+edge claim_count values to entityMocks.ts's evidence_ids as ground truth, and
+added a dev-time cross-file consistency check to catch future drift.
+```

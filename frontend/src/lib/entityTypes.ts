@@ -27,3 +27,21 @@ export function entityTypeColor(type: string): string {
 export function entityTypeLabel(type: string): string {
   return ENTITY_TYPE_LABELS[type.toLowerCase()] ?? type
 }
+
+// Tailwind classes for the pill badges used in the entities list/detail pages (Day 39).
+// Static classes (not built from a template string) are required here — Tailwind v4's
+// JIT scanner only picks up class names it can find literally in source. Colocated with
+// the color/label maps above rather than in a component so any badge in the app renders
+// entity types identically.
+export const ENTITY_TYPE_BADGE_CLASSES: Record<string, string> = {
+  person: 'bg-entity-person/10 text-entity-person',
+  organization: 'bg-entity-organization/10 text-entity-organization',
+  deal: 'bg-entity-deal/10 text-entity-deal',
+  decision: 'bg-entity-decision/10 text-entity-decision',
+}
+
+const FALLBACK_BADGE_CLASSES = 'bg-muted text-muted-foreground'
+
+export function entityTypeBadgeClass(type: string): string {
+  return ENTITY_TYPE_BADGE_CLASSES[type.toLowerCase()] ?? FALLBACK_BADGE_CLASSES
+}

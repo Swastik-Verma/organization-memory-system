@@ -127,12 +127,12 @@ const SALLY_BECK_SUBGRAPH: SubgraphResponse = {
     node(AUGUST_REORG),
   ],
   edges: [
-    edge(SALLY_BECK, JOHN_LAVORATO, 'reports_to', 3),
-    edge(SALLY_BECK, LOUISE_KITCHEN, 'works_with', 5),
-    edge(SALLY_BECK, FLETCHER_STURM, 'informs', 2),
-    edge(SALLY_BECK, WEST_TRADING_DESK, 'works_with', 4),
-    edge(SALLY_BECK, ENRON_AMERICA, 'works_with', 6),
-    edge(SALLY_BECK, AUGUST_REORG, 'informs', 1),
+    edge(SALLY_BECK, JOHN_LAVORATO, 'reports_to', 2),
+    edge(SALLY_BECK, LOUISE_KITCHEN, 'works_with', 1),
+    edge(SALLY_BECK, FLETCHER_STURM, 'informs', 1),
+    edge(SALLY_BECK, WEST_TRADING_DESK, 'works_with', 2),
+    edge(SALLY_BECK, ENRON_AMERICA, 'works_with', 3),
+    edge(SALLY_BECK, AUGUST_REORG, 'informs', 0),
   ],
 }
 
@@ -149,9 +149,9 @@ const JOHN_LAVORATO_SUBGRAPH: SubgraphResponse = {
   ],
   edges: [
     edge(JOHN_LAVORATO, KENNETH_LAY, 'reports_to', 4),
-    edge(SALLY_BECK, JOHN_LAVORATO, 'reports_to', 3),
-    edge(JOHN_LAVORATO, ENRON_AMERICA, 'works_with', 5),
-    edge(JOHN_LAVORATO, GLOBAL_CROSSING_DEAL, 'negotiating_with', 7),
+    edge(SALLY_BECK, JOHN_LAVORATO, 'reports_to', 2),
+    edge(JOHN_LAVORATO, ENRON_AMERICA, 'works_with', 1),
+    edge(JOHN_LAVORATO, GLOBAL_CROSSING_DEAL, 'negotiating_with', 2),
     edge(JOHN_LAVORATO, FINANCE, 'requests_from', 2),
     edge(APPROVE_GC_DEAL, JOHN_LAVORATO, 'informs', 1),
   ],
@@ -168,7 +168,7 @@ const GLOBAL_CROSSING_DEAL_SUBGRAPH: SubgraphResponse = {
     node(APPROVE_GC_DEAL),
   ],
   edges: [
-    edge(JOHN_LAVORATO, GLOBAL_CROSSING_DEAL, 'negotiating_with', 7),
+    edge(JOHN_LAVORATO, GLOBAL_CROSSING_DEAL, 'negotiating_with', 2),
     edge(JOHN_ZUFFERLI, GLOBAL_CROSSING_LTD, 'negotiating_with', 6),
     edge(JOHN_ZUFFERLI, ENRON_LEGAL, 'informs', 2),
     edge(ENRON_LEGAL, GLOBAL_CROSSING_DEAL, 'requests_from', 3),
@@ -188,12 +188,12 @@ const ENRON_AMERICA_SUBGRAPH: SubgraphResponse = {
     node(AUGUST_REORG),
   ],
   edges: [
-    edge(SALLY_BECK, ENRON_AMERICA, 'works_with', 6),
-    edge(JOHN_LAVORATO, ENRON_AMERICA, 'works_with', 5),
-    edge(LOUISE_KITCHEN, ENRON_AMERICA, 'works_with', 4),
-    edge(FLETCHER_STURM, ENRON_AMERICA, 'works_with', 3),
-    edge(KENNETH_LAY, ENRON_AMERICA, 'works_with', 5),
-    edge(AUGUST_REORG, ENRON_AMERICA, 'informs', 2),
+    edge(SALLY_BECK, ENRON_AMERICA, 'works_with', 3),
+    edge(JOHN_LAVORATO, ENRON_AMERICA, 'works_with', 1),
+    edge(LOUISE_KITCHEN, ENRON_AMERICA, 'works_with', 1),
+    edge(FLETCHER_STURM, ENRON_AMERICA, 'works_with', 1),
+    edge(KENNETH_LAY, ENRON_AMERICA, 'works_with', 2),
+    edge(AUGUST_REORG, ENRON_AMERICA, 'informs', 1),
   ],
 }
 
@@ -201,7 +201,7 @@ const WEST_TRADING_DESK_SUBGRAPH: SubgraphResponse = {
   center_id: WEST_TRADING_DESK,
   nodes: [node(WEST_TRADING_DESK), node(SALLY_BECK), node(FLETCHER_STURM), node(ENRON_AMERICA)],
   edges: [
-    edge(SALLY_BECK, WEST_TRADING_DESK, 'works_with', 4),
+    edge(SALLY_BECK, WEST_TRADING_DESK, 'works_with', 2),
     edge(FLETCHER_STURM, WEST_TRADING_DESK, 'works_with', 3),
     edge(WEST_TRADING_DESK, ENRON_AMERICA, 'works_with', 2),
   ],
@@ -211,8 +211,8 @@ const LOUISE_KITCHEN_SUBGRAPH: SubgraphResponse = {
   center_id: LOUISE_KITCHEN,
   nodes: [node(LOUISE_KITCHEN), node(SALLY_BECK), node(ENRON_AMERICA), node(KENNETH_LAY)],
   edges: [
-    edge(SALLY_BECK, LOUISE_KITCHEN, 'works_with', 5),
-    edge(LOUISE_KITCHEN, ENRON_AMERICA, 'works_with', 4),
+    edge(SALLY_BECK, LOUISE_KITCHEN, 'works_with', 1),
+    edge(LOUISE_KITCHEN, ENRON_AMERICA, 'works_with', 1),
     edge(LOUISE_KITCHEN, KENNETH_LAY, 'reports_to', 2),
   ],
 }
@@ -221,8 +221,8 @@ const FLETCHER_STURM_SUBGRAPH: SubgraphResponse = {
   center_id: FLETCHER_STURM,
   nodes: [node(FLETCHER_STURM), node(SALLY_BECK), node(ENRON_AMERICA), node(WEST_TRADING_DESK)],
   edges: [
-    edge(SALLY_BECK, FLETCHER_STURM, 'informs', 2),
-    edge(FLETCHER_STURM, ENRON_AMERICA, 'works_with', 3),
+    edge(SALLY_BECK, FLETCHER_STURM, 'informs', 1),
+    edge(FLETCHER_STURM, ENRON_AMERICA, 'works_with', 1),
     edge(FLETCHER_STURM, WEST_TRADING_DESK, 'works_with', 3),
   ],
 }
@@ -232,7 +232,7 @@ const KENNETH_LAY_SUBGRAPH: SubgraphResponse = {
   nodes: [node(KENNETH_LAY), node(JOHN_LAVORATO), node(ENRON_AMERICA), node(LOUISE_KITCHEN)],
   edges: [
     edge(JOHN_LAVORATO, KENNETH_LAY, 'reports_to', 4),
-    edge(KENNETH_LAY, ENRON_AMERICA, 'works_with', 5),
+    edge(KENNETH_LAY, ENRON_AMERICA, 'works_with', 2),
     edge(LOUISE_KITCHEN, KENNETH_LAY, 'reports_to', 2),
   ],
 }
@@ -256,9 +256,9 @@ const AUGUST_REORG_SUBGRAPH: SubgraphResponse = {
   center_id: AUGUST_REORG,
   nodes: [node(AUGUST_REORG), node(SALLY_BECK), node(ENRON_AMERICA), node(JOHN_LAVORATO)],
   edges: [
-    edge(SALLY_BECK, AUGUST_REORG, 'informs', 1),
-    edge(AUGUST_REORG, ENRON_AMERICA, 'informs', 2),
-    edge(AUGUST_REORG, JOHN_LAVORATO, 'informs', 2),
+    edge(SALLY_BECK, AUGUST_REORG, 'informs', 0),
+    edge(AUGUST_REORG, ENRON_AMERICA, 'informs', 1),
+    edge(AUGUST_REORG, JOHN_LAVORATO, 'informs', 1),
   ],
 }
 
@@ -293,7 +293,7 @@ const GLOBAL_CROSSING_LTD_SUBGRAPH: SubgraphResponse = {
   edges: [
     edge(JOHN_ZUFFERLI, GLOBAL_CROSSING_LTD, 'negotiating_with', 6),
     edge(JOHN_LAVORATO, GLOBAL_CROSSING_LTD, 'negotiating_with', 4),
-    edge(GLOBAL_CROSSING_LTD, GLOBAL_CROSSING_DEAL, 'negotiating_with', 5),
+    edge(GLOBAL_CROSSING_LTD, GLOBAL_CROSSING_DEAL, 'negotiating_with', 1),
   ],
 }
 
