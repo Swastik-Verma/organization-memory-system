@@ -25,5 +25,14 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+
+  /* src/mocks/ is dead code as of Day 41 — no page or component imports it, and Vite
+     never bundles it. Its fixtures still carry the mock-only fields that were removed
+     from src/types/*.ts once the real API contract was verified (CitationItem.message_date,
+     ClaimResult.evidence_ids, EntityListItem.claim_count, EvidenceDetailResponse.subject_id,
+     ...), so they no longer type-check. They are kept as reference for the expected data
+     shapes rather than deleted, and excluded here so a stale fixture can't fail the build.
+     Update a file to the current types before bringing it back into a build. */
+  "exclude": ["src/mocks"]
 }

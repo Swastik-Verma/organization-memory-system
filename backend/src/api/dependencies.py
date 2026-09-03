@@ -62,11 +62,11 @@ def get_chatbot(request: Request) -> "Chatbot":
     return request.app.state.chatbot
 
 def get_conversation_memory(request: Request) -> ConversationMemory:
-    \"\"\"Get the shared ConversationMemory from app state.\"\"\"
+    """Get the shared ConversationMemory from app state."""
     return request.app.state.conversation_memory
 
 def get_follow_up_resolver(request: Request) -> FollowUpResolver:
-    \"\"\"Get the shared FollowUpResolver from app state.\"\"\"
+    """Get the shared FollowUpResolver from app state."""
     return request.app.state.follow_up_resolver
 
 

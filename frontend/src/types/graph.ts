@@ -1,14 +1,21 @@
-// Mirrors backend/src/api/models.py's Graph section field-for-field, same approach as
-// src/types/chat.ts on Day 37 — kept identical to the real Pydantic models so Day 41's
-// integration is a fetch-layer swap, not a type rewrite.
+// Mirrors backend/src/api/models.py's Graph section. Verified live against the running
+// backend on Day 41.
 //
-// Mock-only exception: GraphEdge.claim_count. The real GraphEdge model has no equivalent
-// field (only `type`, `claim_type`, `confidence` — and the current /graph/{id}/subgraph
-// route never populates `claim_type`/`confidence` either, always leaving them null). The
-// day brief asks for edge thickness driven by claim count, so it's added here as a
-// mock-only field, same pattern as chat.ts's message_date/message_subject. Known gap for
-// Day 41: either ask about adding it to the backend, or drop the thickness-by-claim-count
-// treatment when wiring the real endpoint.
+// ── What the raw subgraph endpoint actually returns ───────────────────────────────────
+// GraphEdge.type is the raw Neo4j RELATIONSHIP type, in SCREAMING_CASE:
+//   SUBJECT, OBJECT, SUPPORTED_BY, FROM_MESSAGE, SENT_BY, SENT_TO,
+//   MADE_BY, AFFECTS, SUPERSEDES, CONFLICTS_WITH, PARTY
+// The five claim types (works_with, reports_to, negotiating_with, requests_from, informs)
+// are NOT relationship types — they are a `claim_type` property on Claim NODES. A claim is
+// modelled as (:Person)<-[:SUBJECT]-(:Claim)-[:OBJECT]->(:Person), so the raw endpoint can
+// never return a direct "Sally Beck --reports_to--> Richard Causey" edge at any depth.
+//
+// GraphEdge.claim_type and GraphEdge.confidence are declared on the backend model but the
+// route never populates them — both are always null in the raw response.
+//
+// src/lib/graphData.ts composes a usable entity-to-entity graph out of this endpoint plus
+// /api/entities/{id}/claims, and fills claim_type / confidence / claim_count itself. Read
+// that file's header for the full rationale.
 
 export interface GraphNode {
   id: string
@@ -20,10 +27,15 @@ export interface GraphNode {
 export interface GraphEdge {
   source: string
   target: string
-  type: string // relationship type — mock uses the closed claim-type vocabulary directly
+  /** Display relationship type. Raw endpoint: SCREAMING_CASE Neo4j type. After
+   *  graphData.ts composition: one of the 8 lowercase types the UI renders. */
+  type: string
+  /** Populated by graphData.ts for claim-derived edges; always null from the raw endpoint. */
   claim_type: string | null
+  /** Populated by graphData.ts (max confidence across merged claims); null from the raw endpoint. */
   confidence: number | null
-  claim_count: number | null // mock-only — see note above
+  /** Number of claims collapsed into this edge. Derived by graphData.ts; not a backend field. */
+  claim_count: number | null
 }
 
 export interface SubgraphResponse {

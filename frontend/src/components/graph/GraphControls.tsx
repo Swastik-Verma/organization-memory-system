@@ -1,3 +1,8 @@
+// The 1-hop / 2-hop toggle was removed on Day 41. Every subgraph request is now single-hop:
+// a 2-hop neighbourhood of a well-connected person runs to hundreds of nodes and is
+// unreadable, and the backend's depth=2 query LIMITs before it has enumerated the claim
+// paths, so it returns an arbitrary slice rather than a bigger version of the same graph.
+// Deliberate scope reduction, not a bug.
 import { type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,8 +13,6 @@ interface GraphControlsProps {
   onSubmitSearch: () => void
   isSearching: boolean
   searchError: string | null
-  hops: 1 | 2
-  onHopsChange: (hops: 1 | 2) => void
   onReset: () => void
 }
 
@@ -19,8 +22,6 @@ export function GraphControls({
   onSubmitSearch,
   isSearching,
   searchError,
-  hops,
-  onHopsChange,
   onReset,
 }: GraphControlsProps) {
   function handleSubmit(e: FormEvent) {
@@ -34,7 +35,8 @@ export function GraphControls({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Graph Explorer</h1>
           <p className="text-sm text-muted-foreground">
-            Click a node to expand its neighborhood. Double-click to view its full profile.
+            Click a node to expand its neighborhood. Double-click to open its profile in a
+            new tab. Arrows point from subject to object; undirected lines are mutual.
           </p>
         </div>
       </div>
@@ -51,27 +53,6 @@ export function GraphControls({
             {isSearching ? 'Searching…' : 'Search'}
           </Button>
         </form>
-
-        <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-          <Button
-            type="button"
-            size="sm"
-            variant={hops === 1 ? 'default' : 'ghost'}
-            onClick={() => onHopsChange(1)}
-            aria-pressed={hops === 1}
-          >
-            1 hop
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={hops === 2 ? 'default' : 'ghost'}
-            onClick={() => onHopsChange(2)}
-            aria-pressed={hops === 2}
-          >
-            2 hops
-          </Button>
-        </div>
 
         <Button type="button" variant="outline" onClick={onReset}>
           Reset

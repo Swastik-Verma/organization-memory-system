@@ -1,13 +1,17 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { EntityTypeBadge } from '@/components/entity/EntityTypeBadge'
-import type { EntityDetailResponse } from '@/types/entity'
+import type { EntityDetailResponse, EntityStats } from '@/types/entity'
 
 interface EntityHeaderProps {
   entity: EntityDetailResponse
+  /** Claim count and first/last-seen dates. The real EntityDetailResponse carries none of
+   *  these, so EntityDetailPage derives them from the entity's claims and passes them in.
+   *  null while that second request is still in flight. */
+  stats: EntityStats | null
 }
 
-export function EntityHeader({ entity }: EntityHeaderProps) {
+export function EntityHeader({ entity, stats }: EntityHeaderProps) {
   return (
     <div className="space-y-4">
       <Link
@@ -29,12 +33,19 @@ export function EntityHeader({ entity }: EntityHeaderProps) {
         )}
 
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
-          <span>{entity.mention_count} mentions</span>
-          <span>{entity.claim_count} claims</span>
-          <span>
-            First seen {entity.first_seen ?? 'unknown'} &middot; Last seen {entity.last_seen ?? 'unknown'}
-          </span>
+          <span>{entity.mention_count.toLocaleString()} mentions</span>
+          <span>{stats ? `${stats.claim_count.toLocaleString()} claims` : 'Counting claims…'}</span>
+          {stats && (stats.first_seen || stats.last_seen) && (
+            <span>
+              First seen {stats.first_seen ?? 'unknown'} &middot; Last seen{' '}
+              {stats.last_seen ?? 'unknown'}
+            </span>
+          )}
         </div>
+
+        {entity.emails.length > 0 && (
+          <p className="text-sm text-muted-foreground">{entity.emails.join(', ')}</p>
+        )}
       </div>
     </div>
   )

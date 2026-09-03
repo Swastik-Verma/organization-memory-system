@@ -1,39 +1,37 @@
-// Mirrors backend/src/api/models.py's Entity section field-for-field, same approach as
-// chat.ts (Day 37) and graph.ts (Day 38) — kept identical to the real Pydantic models so
-// Day 41's integration is a fetch-layer swap, not a type rewrite. Verified against
-// backend/src/api/models.py and backend/src/api/routes/entities.py directly.
+// Mirrors backend/src/api/models.py's Entity section field-for-field. Verified live against
+// the running backend on Day 41 — every field below is one the API actually returns.
 //
-// Mock-only additions, each flagged individually below (same pattern as chat.ts's
-// message_date/message_subject and graph.ts's claim_count):
+// ── Day 41: mock-only fields removed ──────────────────────────────────────────────────
+// Days 39-40 carried several fields the real models don't have. Now that the pages are on
+// live data, each has been resolved rather than left as a lie in the type:
 //
-//   - EntityListItem.claim_count — the real EntityListItem model has no such field
-//     (only id, name, type, mention_count). The Day 39 brief asks the list cards to show
-//     a claim count regardless.
-//   - EntityDetailResponse.first_seen / last_seen / claim_count — none of these three are
-//     on the real EntityDetailResponse (only id, name, type, mention_count, aliases,
-//     emails, org_type). The brief's detail header wants all three anyway.
-//   - ClaimResult.evidence_ids — the real ClaimResult has a generic `evidence: list[dict]`
-//     field instead. `source_count` (the brief's other requested field) is NOT stored
-//     separately here — it's derived as `evidence_ids.length` wherever it's shown, so
-//     there's exactly one number to keep in sync rather than two that could drift.
+//   - EntityListItem.claim_count — REMOVED. The real EntityListItem has no such field, and
+//     there is no way to obtain it for a whole page of entities without one extra request
+//     per row. EntityCard.tsx now shows mention_count only.
+//   - EntityDetailResponse.claim_count / first_seen / last_seen — REMOVED from the type.
+//     They are now DERIVED client-side in EntityDetailPage.tsx from a single
+//     GET /api/entities/{id}/claims call (claim_count = response.total; first_seen /
+//     last_seen = min/max of valid_from) and passed to EntityHeader as a separate
+//     `stats` prop. Deriving claim_count from the same call the Claims tab renders is
+//     deliberate: the header's "N claims" and the Claims tab's list are then guaranteed to
+//     be the same number rather than two independent counts that can disagree.
+//   - ClaimResult.evidence_ids — REPLACED by the real `evidence: EvidenceRef[]` field.
 //
-// Known gap for Day 41: either ask about adding claim_count/first_seen/last_seen to the
-// backend models, or drop them / compute them client-side (e.g. claim_count from a
-// GET .../claims call, first_seen/last_seen from scanning claim dates) when wiring the
-// real endpoints.
-//
-// Also note: /api/entities (backend/src/api/routes/entities.py) only ever matches
-// `(n:Person) OR (n:Organization)` — Deal and Decision nodes are not reachable through
-// this endpoint at all today. The Day 39 brief's type filter asks for all 4 types, so
-// the mocks below support all 4, but this is a real backend gap to flag before Day 41,
-// not something fixable from the frontend. See the Day 39 log entry.
+// ── KNOWN BACKEND GAP (flagged, not worked around) ────────────────────────────────────
+// `ClaimResult.evidence` is declared as `list[dict]` on the backend model but
+// backend/src/api/routes/entities.py's claims query NEVER selects or populates it — it is
+// always []. The data exists: all 5,586 Claim nodes have a (:Claim)-[:SUPPORTED_BY]->
+// (:Evidence) relationship in Neo4j, the route simply doesn't traverse it. Consequence:
+// the "View evidence" link on every claim card falls back to the Day 39 "No supporting
+// evidence indexed yet." empty state, for every claim. Fixing this needs a backend change
+// (CLAUDE.md §5 — not made here). Chat citations are unaffected: CitationItem carries a
+// real evidence_id, so the chat evidence drawer and /evidence/:id page work correctly.
 
 export interface EntityListItem {
   id: string
   name: string
-  type: string // 'person' | 'organization' | 'deal' | 'decision' — lowercase
+  type: string // 'person' | 'organization' — lowercase, see entityTypes.ts
   mention_count: number
-  claim_count: number // mock-only — see note above
 }
 
 export interface EntityListResponse {
@@ -51,9 +49,22 @@ export interface EntityDetailResponse {
   aliases: string[]
   emails: string[]
   org_type: string | null
-  first_seen: string | null // mock-only — see note above
-  last_seen: string | null // mock-only — see note above
-  claim_count: number // mock-only — see note above
+}
+
+/** Counts/date-range derived client-side from the claims response — see header note. */
+export interface EntityStats {
+  claim_count: number
+  first_seen: string | null
+  last_seen: string | null
+}
+
+/** One entry of ClaimResult.evidence. Always absent in practice today — see header note. */
+export interface EvidenceRef {
+  evidence_id?: string
+  quote?: string
+  message_id?: string
+  email_subject?: string
+  email_date?: string
 }
 
 export interface ClaimResult {
@@ -66,9 +77,15 @@ export interface ClaimResult {
   confidence: number
   valid_from: string | null
   valid_to: string | null
-  status: string
+  status: string // 'current' | 'superseded' | 'review' — see claimTypes.ts
+  /** Mentions of the CLAIM — how many emails asserted this one fact. Not an entity count. */
   mention_count: number
-  evidence_ids: string[] // mock-only — see note above
+  /** The subject ENTITY's own Person/Organization.mention_count. Distinct from the
+   *  claim-level mention_count above; this is the same number /api/entities/{id} reports. */
+  subject_mention_count: number
+  /** The object ENTITY's own Person/Organization.mention_count. */
+  object_mention_count: number
+  evidence: EvidenceRef[]
 }
 
 export interface EntityClaimsResponse {

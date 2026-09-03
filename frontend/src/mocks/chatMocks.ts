@@ -1,3 +1,17 @@
+// Mock data — NOT used in production. Kept for reference and potential testing.
+//
+// Day 41 replaced every mock call in the app with real API calls (src/lib/api.ts). Nothing
+// under src/pages or src/components imports from this folder any more. These files are
+// retained because they document the expected response shapes and are useful fixtures if
+// component tests are added later.
+//
+// WARNING: these fixtures predate the Day 41 type changes and no longer type-check against
+// src/types/*.ts (mock-only fields such as CitationItem.message_date, ClaimResult.evidence_ids
+// and EntityListItem.claim_count were removed once the real contract was known). They are
+// excluded from the build via tsconfig.app.json and Vite never bundles them, since no
+// reachable module imports them. Bring a file back into a build only after updating it to
+// the current types.
+
 import type { ChatResponse } from '@/types/chat'
 
 // Fixture responses matching the real ChatResponse shape (backend/src/api/models.py).

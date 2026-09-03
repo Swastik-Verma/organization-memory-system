@@ -48,6 +48,8 @@ class ClaimResult(BaseModel):
     valid_to: Optional[str] = None
     status: str = ""
     mention_count: int = 0
+    subject_mention_count: int = 0   # ADD THIS
+    object_mention_count: int = 0    # ADD THIS
     relevance_score: float = 0.0
     composite_score: float = 0.0
     source: str = ""

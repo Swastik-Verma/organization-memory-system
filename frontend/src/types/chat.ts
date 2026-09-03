@@ -2,13 +2,11 @@
 // identical (not the day-37 task brief's simplified sketch) so Day 41's real
 // integration is a fetch-layer swap, not a type rewrite.
 //
-// Exception: message_date and message_subject below. The real CitationItem model
-// does NOT have these fields (verified against backend/src/api/models.py on Day 37) —
-// only GET /api/evidence/{id} (EvidenceDetailResponse) carries email_date/email_subject.
-// The Day 37 plan asks the evidence drawer to show them anyway, so they're added here
-// as mock-only fields. This is a known gap for Day 41: either the backend needs a small
-// addition to CitationItem, or the drawer needs to fetch /api/evidence/{evidence_id} to
-// populate them for real. Flag this before starting Day 41 integration.
+// Day 41 update: message_date / message_subject have been REMOVED from CitationItem. They
+// were mock-only fields added on Day 37 for the evidence drawer's "Source" section; the
+// real CitationItem returned by POST /api/chat has never had them. The drawer now fetches
+// GET /api/evidence/{evidence_id} when it opens and reads email_date / email_subject from
+// EvidenceDetailResponse instead — see EvidenceDrawer.tsx.
 
 export interface CitationItem {
   marker: string // "[1]", "[2]", ...
@@ -20,8 +18,6 @@ export interface CitationItem {
   evidence_quote: string
   evidence_id: string
   confidence: number
-  message_date: string | null // mock-only — see note above
-  message_subject: string | null // mock-only — see note above
 }
 
 export interface ClarificationOption {

@@ -22,7 +22,12 @@ function EntityRef({ id, name, isCurrent }: { id: string; name: string; isCurren
 }
 
 export function ClaimCard({ claim, currentEntityId }: ClaimCardProps) {
-  const sourceCount = claim.evidence_ids.length
+  // ClaimResult.evidence is declared on the backend model but the claims route never
+  // populates it — it is always []. The underlying (:Claim)-[:SUPPORTED_BY]->(:Evidence)
+  // relationships DO exist for all 5,586 claims; the Cypher simply doesn't traverse them.
+  // Fixing that is a backend change (CLAUDE.md §5), so this handles the empty case honestly
+  // rather than claiming the evidence doesn't exist. See types/entity.ts.
+  const evidenceId = claim.evidence.find((e) => e.evidence_id)?.evidence_id ?? null
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -73,14 +78,14 @@ export function ClaimCard({ claim, currentEntityId }: ClaimCardProps) {
           <p className="text-foreground">{claim.valid_to ?? 'Present'}</p>
         </div>
         <div>
-          <p className="mb-1">Sources</p>
-          <p className="text-foreground">{sourceCount === 0 ? 'None yet' : sourceCount}</p>
+          <p className="mb-1">Mentions</p>
+          <p className="text-foreground">{claim.mention_count}</p>
         </div>
       </div>
 
-      {sourceCount > 0 ? (
+      {evidenceId ? (
         <Link
-          to={`/evidence/${encodeURIComponent(claim.evidence_ids[0])}`}
+          to={`/evidence/${encodeURIComponent(evidenceId)}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs font-medium text-primary hover:underline"
@@ -88,7 +93,9 @@ export function ClaimCard({ claim, currentEntityId }: ClaimCardProps) {
           View evidence &rarr;
         </Link>
       ) : (
-        <p className="text-xs text-muted-foreground italic">No supporting evidence indexed yet.</p>
+        <p className="text-xs text-muted-foreground italic">
+          Evidence links are not returned by this endpoint yet.
+        </p>
       )}
     </div>
   )

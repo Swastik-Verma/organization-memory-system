@@ -4,7 +4,8 @@ import { ClaimSection } from '@/components/evidence/ClaimSection'
 import { EvidenceQuote } from '@/components/evidence/EvidenceQuote'
 import { SourceEmail } from '@/components/evidence/SourceEmail'
 import { Skeleton } from '@/components/ui/skeleton'
-import { mockFetchEvidence } from '@/mocks/evidenceMocks'
+import { ApiErrorState } from '@/components/ApiErrorState'
+import { fetchEvidence, isAbort } from '@/lib/api'
 import type { EvidenceDetailResponse } from '@/types/evidence'
 
 export function EvidencePage() {
@@ -13,25 +14,22 @@ export function EvidencePage() {
   const navigate = useNavigate()
 
   const [evidence, setEvidence] = useState<EvidenceDetailResponse | null>(null)
-  const [notFound, setNotFound] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     setEvidence(null)
-    setNotFound(false)
+    setError(null)
 
-    mockFetchEvidence(id)
-      .then((res) => {
-        if (!cancelled) setEvidence(res)
-      })
-      .catch(() => {
-        if (!cancelled) setNotFound(true)
+    fetchEvidence(id, { signal: controller.signal })
+      .then(setEvidence)
+      .catch((err: unknown) => {
+        if (!isAbort(err)) setError(err)
       })
 
-    return () => {
-      cancelled = true
-    }
-  }, [id])
+    return () => controller.abort()
+  }, [id, reloadToken])
 
   // This page is usually opened in a new tab (from the chat evidence drawer or an entity's
   // claim card), so there's often no in-app history to go back to — fall back to /entities
@@ -58,17 +56,23 @@ export function EvidencePage() {
         <p className="text-sm text-muted-foreground">Evidence ID: {id}</p>
       </div>
 
-      {notFound && (
-        <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          Evidence "{id}" was not found.{' '}
-          <Link to="/entities" className="font-medium text-primary hover:underline">
-            Browse entities
-          </Link>{' '}
-          instead.
-        </p>
-      )}
+      {error ? (
+        <div className="space-y-3">
+          <ApiErrorState
+            error={error}
+            onRetry={() => setReloadToken((n) => n + 1)}
+            notFoundMessage={`No evidence with id "${id}" exists in the graph.`}
+          />
+          <p className="text-center text-sm text-muted-foreground">
+            <Link to="/entities" className="font-medium text-primary hover:underline">
+              Browse entities
+            </Link>{' '}
+            instead.
+          </p>
+        </div>
+      ) : null}
 
-      {!notFound && !evidence && (
+      {!error && !evidence && (
         <div className="space-y-6">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-20 w-full" />
@@ -76,7 +80,7 @@ export function EvidencePage() {
         </div>
       )}
 
-      {!notFound && evidence && (
+      {!error && evidence && (
         <div className="space-y-6">
           <ClaimSection evidence={evidence} />
           <EvidenceQuote quote={evidence.quote} />

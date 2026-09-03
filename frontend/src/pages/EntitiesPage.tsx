@@ -5,19 +5,34 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { entityTypeBadgeClass, entityTypeLabel } from '@/lib/entityTypes'
-import { mockFetchEntities } from '@/mocks/entityMocks'
+import { ApiErrorState } from '@/components/ApiErrorState'
+import { fetchEntities, isAbort } from '@/lib/api'
 import type { EntityListItem } from '@/types/entity'
 
-const ENTITY_TYPES = ['person', 'organization', 'deal', 'decision']
+// Only person and organization. GET /api/entities matches `(n:Person) OR (n:Organization)`
+// and its entity_type param understands only those two strings — passing "deal" or
+// "decision" does NOT filter or error, it silently falls through to the unfiltered branch
+// and returns all 21,729 person+org entities mislabelled as a Deal/Decision result. Deal
+// and Decision nodes are genuinely unreachable through this endpoint; they are searchable
+// via /api/graph/search and appear in the Graph Explorer instead. (Backend gap — flagged,
+// not worked around; see CLAUDE.md §5.)
+const ENTITY_TYPES = ['person', 'organization']
 const PAGE_SIZE = 10
+// The search box now hits the server on every keystroke, so it waits for a pause in typing
+// rather than firing a request per character (Day 39 deferred this while the mock was local).
+const SEARCH_DEBOUNCE_MS = 300
 
 export function EntitiesPage() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [skip, setSkip] = useState(0)
 
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
   const [entities, setEntities] = useState<EntityListItem[] | null>(null)
   const [total, setTotal] = useState(0)
+  const [error, setError] = useState<unknown>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   // Filtering/search reset the page back to the start rather than leaving the user on a
   // page number that might no longer exist for the new result set. Bundled into the same
@@ -35,17 +50,30 @@ export function EntitiesPage() {
   }
 
   useEffect(() => {
-    let cancelled = false
+    const timer = window.setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    const controller = new AbortController()
     setEntities(null)
-    mockFetchEntities({ type: typeFilter ?? undefined, search, skip, limit: PAGE_SIZE }).then((res) => {
-      if (cancelled) return
-      setEntities(res.entities)
-      setTotal(res.total)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [typeFilter, search, skip])
+    setError(null)
+
+    fetchEntities(
+      { type: typeFilter ?? undefined, search: debouncedSearch, skip, limit: PAGE_SIZE },
+      { signal: controller.signal },
+    )
+      .then((res) => {
+        setEntities(res.entities)
+        setTotal(res.total)
+      })
+      .catch((err: unknown) => {
+        if (isAbort(err)) return
+        setError(err)
+      })
+
+    return () => controller.abort()
+  }, [typeFilter, debouncedSearch, skip, reloadToken])
 
   const page = Math.floor(skip / PAGE_SIZE) + 1
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -93,7 +121,9 @@ export function EntitiesPage() {
         />
       </div>
 
-      {entities === null ? (
+      {error ? (
+        <ApiErrorState error={error} onRetry={() => setReloadToken((n) => n + 1)} />
+      ) : entities === null ? (
         <div className="space-y-2">
           <Skeleton className="h-14 w-full" />
           <Skeleton className="h-14 w-full" />
@@ -111,7 +141,7 @@ export function EntitiesPage() {
         </div>
       )}
 
-      {entities !== null && total > PAGE_SIZE && (
+      {!error && entities !== null && total > PAGE_SIZE && (
         <div className="flex items-center justify-between pt-2">
           <p className="text-xs text-muted-foreground">
             Page {page} of {pageCount} &middot; {total} entities

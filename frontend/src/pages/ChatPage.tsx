@@ -4,8 +4,27 @@ import { Button } from '@/components/ui/button'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { ChatMessageList } from '@/components/chat/ChatMessageList'
 import { EvidenceDrawer } from '@/components/evidence/EvidenceDrawer'
-import { mockChatApi } from '@/mocks/chatMocks'
+import { ApiError, sendChatMessage } from '@/lib/api'
 import type { CitationItem, ConversationEntry } from '@/types/chat'
+
+// User-facing copy for a failed /api/chat call. Kept here rather than reusing
+// ApiErrorState because the chat page renders failures inline as a conversation entry with
+// its own Retry affordance (Day 37), not as a whole-page error.
+function chatErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.kind === 'network') {
+      return 'Cannot connect to the backend. Make sure the API server is running on port 8000.'
+    }
+    if (err.kind === 'timeout') {
+      return 'The backend took more than a minute to answer. A chat turn runs two language-model calls plus retrieval, so this usually means the LLM API is struggling — try again.'
+    }
+    if (err.kind === 'server') {
+      return 'The backend hit an internal error answering this question. This is often an exhausted LLM API quota.'
+    }
+    return err.message
+  }
+  return 'Something went wrong. Please try again.'
+}
 
 export function ChatPage() {
   const [entries, setEntries] = useState<ConversationEntry[]>([])
@@ -19,7 +38,7 @@ export function ChatPage() {
     async (question: string) => {
       setIsLoading(true)
       try {
-        const response = await mockChatApi(question, sessionId)
+        const response = await sendChatMessage(question, sessionId)
         setSessionId(response.session_id)
         setEntries((prev) => [
           ...prev,
@@ -32,7 +51,7 @@ export function ChatPage() {
             id: crypto.randomUUID(),
             role: 'error',
             questionText: question,
-            message: err instanceof Error ? err.message : 'Something went wrong. Please try again.',
+            message: chatErrorMessage(err),
           },
         ])
       } finally {

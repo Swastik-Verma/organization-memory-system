@@ -1020,3 +1020,334 @@ surfaces (but does not silently resolve) a pre-existing data conflict where
 chatMocks.ts and entityMocks.ts disagree about what claim evidence_2211
 belongs to — not user-visible today, flagged for Day 41.
 ```
+
+---
+
+## Day 41 — Backend Integration
+
+### What was built
+
+Every page now runs on the live FastAPI backend. No production code path imports from
+`src/mocks/` any more (verified: `grep -rn "mocks/" src/ --include="*.tsx" --include="*.ts"`
+returns hits only inside `src/mocks/` itself).
+
+**New files**
+- `src/lib/api.ts` — the single transport layer. One function per real endpoint, returning
+  the backend's shape verbatim. Every id that goes in a URL path is `encodeURIComponent()`d
+  here and *only* here; ids in React state, graph node objects and comparisons stay raw.
+  Exports a typed `ApiError` with `kind: 'network' | 'timeout' | 'notfound' | 'client' |
+  'server' | 'parse'` so pages branch on a discriminant instead of string-matching messages.
+  All requests accept an `AbortSignal` so an unmounted page's request is dropped.
+- `src/lib/graphData.ts` — composes the graph explorer's data (see the graph section below).
+- `src/lib/relationshipTypes.ts` — the 8 relationship types and their directionality.
+- `src/components/ApiErrorState.tsx` — one place that turns an `ApiError` into user-facing
+  copy, so "backend isn't running" reads identically on every page.
+- `src/types/health.ts` — mirrors `HealthResponse`.
+
+**Pages wired:** Chat, Graph Explorer, Entities list, Entity detail (+ all three tabs),
+Evidence, and a basic Health page (full dashboard is still Day 42).
+
+### The big finding: the graph endpoint cannot return the graph the brief describes
+
+The Day 41 brief asks for 8 relationship types with arrowheads, giving
+`Sally Beck --reports_to--> John Lavorato` as the example, and says to hardcode `hops=1`.
+**That edge does not exist in `/api/graph/{id}/subgraph` at any depth.**
+
+Real Neo4j relationship types are `SUBJECT`, `OBJECT`, `SUPPORTED_BY`, `FROM_MESSAGE`,
+`SENT_BY`, `SENT_TO`, `MADE_BY`, `AFFECTS`, `SUPERSEDES`, `CONFLICTS_WITH`, `PARTY`. The
+five claim types (`works_with`, `reports_to`, …) are **a property on Claim nodes**, never an
+edge label — a claim is `(:Person)<-[:SUBJECT]-(:Claim)-[:OBJECT]->(:Person)`. Measured live
+against Sally Beck (2,244 edges):
+
+| request | result |
+|---|---|
+| `depth=1&limit=200` | 201 nodes: **200 Claim nodes + 1 Person**, zero entity-to-entity edges |
+| `depth=2&limit=200` | 87 nodes, 112 edges, **all `PARTY`**, zero Claim nodes |
+
+`depth=2` is not "a bigger version of depth=1": its Cypher `LIMIT`s before it has enumerated
+the claim paths, so it returns an arbitrary slice. Following the brief literally would have
+produced a 200-node star of claim nodes with no relationships visible.
+
+**Asked the user rather than deciding silently (CLAUDE.md §5). The chosen option was the
+claims + subgraph hybrid**, implemented in `src/lib/graphData.ts`:
+
+1. `/api/entities/{id}/claims` → person/org edges carrying the 5 claim types, with real
+   direction, confidence and mention_count. This endpoint has **no limit param** and returns
+   every claim, so the core graph is always complete.
+2. `/api/graph/{id}/subgraph?depth=1` → Deal (`PARTY`) and Decision (`MADE_BY`/`AFFECTS`)
+   neighbours. Claim and Message nodes are discarded; the SCREAMING_CASE types are lowercased.
+
+Both calls run in parallel via `Promise.allSettled` and are independently fault-tolerant —
+one failing still renders the other's half rather than an error screen. Node type is read off
+the id prefix (`person:` / `org:` / `deal:` / `decision:`), since the claims endpoint returns
+ids and names but no type.
+
+**Neighbour caps:** 20 claim counterparts + 8 structural, ranked by best confidence then
+total mention_count. Sally Beck's 247 claims would otherwise be an unreadable hairball.
+
+### Two real graph bugs found and fixed during verification
+
+1. **Symmetric relationships were drawn twice.** `works_with` and `negotiating_with` are
+   symmetric — "A works_with B" and "B works_with A" are one fact, recorded as two claims
+   from two different emails. `edgeKey()` now sorts the endpoints for symmetric types, and
+   symmetric edges are emitted with sorted source/target, so the same relationship reached
+   from either end produces one edge. `GraphExplorerPage` imports that same `edgeKey` — using
+   a different key there would have re-split them on merge across two fetches.
+2. **Up to 6 parallel edges stacked into one line.** Sally Beck and Brent Price are connected
+   by six genuinely distinct claims: `works_with`, `informs` both ways, `requests_from`, and
+   **`reports_to` in BOTH directions** (a real contradiction in the extracted data — good
+   Day 44 conflict-review material). Drawn straight, all six land on the identical line with
+   six labels at the identical midpoint. Added `computeCurvatures()` to `graphForces.ts`
+   (kept there, not in the canvas, because that module is importable without a DOM so a test
+   can exercise the real function): edges are bundled by **unordered** pair so an A→B and a
+   B→A edge fan apart instead of bowing into each other, spread evenly across ±0.45, and a
+   lone edge stays perfectly straight. The edge-label renderer now places labels at the
+   **quadratic bezier midpoint** (`0.25·P0 + 0.5·C + 0.25·P2`, reading force-graph's
+   `__controlPoints`) — the straight midpoint sits well off a curved line.
+
+### Other Day 41 changes to the graph explorer
+
+- **Hops selector removed** from `GraphControls.tsx` entirely, as the brief specified.
+- **Double-click opens `/entities/:id` in a new tab** via `window.open(..., '_blank')`,
+  matching Day 40's evidence-link behaviour. No GraphContext / state lifting, per the brief.
+- **Arrowheads** via `linkDirectionalArrowLength`, set to 0 for the two symmetric types.
+- Initial view resolves `Sally Beck` through `/api/graph/search` rather than hard-coding an
+  id. `?entity=<id>` in the URL overrides it — the entity detail page's "View in Graph
+  Explorer" button now passes the entity, so it lands on that profile's neighbourhood.
+- `mergeSubgraph` now **mutates existing node objects in place** rather than skipping them.
+  Force-graph stores `x/y/vx/vy` directly on the node objects it was handed, so replacing the
+  object would drop its settled position. This lets a neighbour's estimated weight be
+  upgraded to its real `mention_count` once it's expanded or arrives from a search.
+
+### Backend response shapes that differed from the frontend types
+
+Every mock-only field carried since Day 37 was resolved rather than left lying in the types.
+
+| Field | Reality | Handled by |
+|---|---|---|
+| `CitationItem.message_date` / `message_subject` | never existed on the real model | **Removed.** The evidence drawer now fetches `GET /api/evidence/{evidence_id}` on open and reads `email_date`/`email_subject`, with a skeleton while in flight and "Source metadata unavailable." on failure. |
+| `EntityListItem.claim_count` | not on the model, and un-derivable without one request per row | **Removed** from the type and from `EntityCard`. |
+| `EntityDetailResponse.claim_count` / `first_seen` / `last_seen` | not on the model | **Derived** in `EntityDetailPage` from a single `/claims` call (`claim_count = response.total`, dates = min/max `valid_from`), passed to `EntityHeader` as a separate `stats` prop. Deliberately the *same* call the Claims tab renders, so the header's "N claims" and the tab's card count cannot disagree. |
+| `ClaimResult.evidence_ids` | real field is `evidence: list[dict]` | Type updated to the real `evidence: EvidenceRef[]`. **See the backend gap below.** |
+| `GraphEdge.claim_type` / `confidence` | never populated by the route (always null) | `graphData.ts` fills them itself from the claims data. |
+| `GraphEdge.claim_count` | not a backend field at all | Now genuinely derived: the number of claims of that type collapsed into the edge. |
+| `EvidenceDetailResponse.subject_id` / `object_id` | not on the model; no endpoint resolves a claim to its entity ids | `ClaimSection` renders subject/object as **plain text, not links**. |
+| `EvidenceDetailResponse.status` / `valid_from` / `valid_to` | live on the Claim node; evidence.py never selects them | **Removed** — the status badge and validity range are gone from the evidence page. |
+| `EvidenceDetailResponse.email_to` | model has only `email_from` | **Removed** — `SourceEmail` no longer renders a "To" row. |
+| claim `status` vocabulary | real values are `current` / `superseded` / `review` (5538/15/33) — **not** Day 39's `active` | Added `current` to `CLAIM_STATUS_COLORS`; `active` kept as an alias. Without this every claim would have rendered a grey "Unknown" badge. |
+
+Also fixed while in there: the Day 37 evidence drawer linked to `/evidence/${citation.evidence_id}`
+**without** `encodeURIComponent`. Real evidence ids contain a colon, so that link would have
+been malformed on every citation. Now encoded.
+
+### Backend gaps found — flagged, not worked around (CLAUDE.md §5)
+
+1. **`ClaimResult.evidence` is always `[]`.** `entities.py`'s claims query never selects it.
+   The data exists — **all 5,586 Claim nodes have a `(:Claim)-[:SUPPORTED_BY]->(:Evidence)`
+   relationship** — the Cypher simply doesn't traverse it. Consequence: the "View evidence"
+   link on every claim card falls through to a message saying evidence links aren't returned
+   by this endpoint. Chat citations are unaffected (`CitationItem` carries a real
+   `evidence_id`), so the drawer and `/evidence/:id` work correctly.
+2. **`GET /api/entities?entity_type=deal` silently returns the whole corpus.** It doesn't
+   filter and doesn't error — it falls through to the unfiltered `(n:Person OR n:Organization)`
+   branch and returns all 21,729 person+org entities *labelled as a Deal result*. This is
+   worse than the Day 39 note predicted (which expected a 404). **The Deal and Decision
+   filter chips have been removed** from the entities page; only Person and Organization
+   remain. `GET /api/entities/{id}` has the same restriction, so a Deal/Decision id 404s
+   there. Deals and Decisions are still reachable via `/api/graph/search` and appear in the
+   graph explorer.
+3. **`/api/graph/{id}/subgraph` truncation makes structural neighbours best-effort.** The
+   route caps at `limit=200`, has no relationship-type filter, and returns rows in Neo4j's
+   enumeration order. For Sally Beck all 200 rows are `SUBJECT`/`OBJECT`, so her 83 `PARTY`
+   and 867 `AFFECTS`/`MADE_BY` edges never arrive and no Deal/Decision appears in her graph.
+   For `org:enron` all 200 rows are `AFFECTS`, so 8 Decision nodes *do* appear. Not fixable
+   from the frontend (the limit is already at maximum). Degrades gracefully — claim edges
+   come from the unlimited `/claims` endpoint, so only the Deal/Decision garnish is affected.
+
+### The 10-second timeout had to be split
+
+The brief specifies a 10s timeout. Applied to `/api/chat` that makes chat **permanently
+broken**: the first live call aborted client-side at 10.000s, and the server log shows the
+backend had returned a correct 3-citation answer at **10.2s** — the user would have seen a
+timeout error and the Gemini quota would have been spent anyway. A chat turn is a
+query-understanding LLM call + 4.1s of graph/semantic retrieval + an answer-generation LLM
+call (+ a third call to rewrite a follow-up). So `REQUEST_TIMEOUT_MS` stays 10s for the
+read-only endpoints, and `CHAT_TIMEOUT_MS = 60_000` applies to `POST /api/chat` only.
+
+### `/api/entities?search=` behaviour (asked for explicitly)
+
+- **Case-insensitive: YES.** `sally beck` and `SALLY BECK` return identical results — the
+  Cypher is `toLower(n.canonical_name) CONTAINS toLower($search)`.
+- **Matches aliases: YES.** `Sally W. Beck` (an alias, not the canonical name) matches.
+- **Does NOT match email addresses.** `sbeck` returns 0 results — emails live in `n.emails`,
+  which the search clause never touches, and `/api/graph/search` explicitly excludes aliases
+  containing `@`.
+- Substring, not prefix or fuzzy: `beck` matches `Fernley Dyson and Sally Beck` too.
+
+⚠️ **The alias half of that is an UNCOMMITTED working-tree change to
+`backend/src/api/routes/entities.py`** (mtime 00:16, before this session started — not made
+by this session; CLAUDE.md §5 was respected and no backend file was touched). At `HEAD` the
+condition is only `toLower(n.canonical_name) CONTAINS toLower($search)`. **If that change is
+reverted or lost, alias matching disappears.** `backend/src/api/dependencies.py` has a
+similar uncommitted docstring-escaping fix.
+
+### Mock files
+
+Not deleted, per the brief. Each of the four now carries a header banner marking it as not
+part of the production code path. They **no longer type-check** (they still populate the
+mock-only fields removed above), so `src/mocks` was added to `exclude` in
+`tsconfig.app.json` — Vite never bundled them anyway, since nothing reachable imports them.
+Update a file to the current types before bringing it back into a build.
+
+### Verification
+
+Same standing constraint as every prior day: **no real browser** (Playwright needs
+`libnspr4`/`libnss3`, no `sudo`). Three ephemeral test layers, all removed afterwards
+(`--no-save`; `package.json`/`package-lock.json` md5s confirmed **byte-identical** before and
+after):
+
+1. **Live integration, 63/63 passed** — drove the real `src/lib/api.ts` and
+   `src/lib/graphData.ts` against the running backend. Covered: health; pagination and
+   type filtering; the three search-behaviour findings above; colon-bearing ids round-tripping
+   through `encodeURIComponent`; server-side `claim_type` filtering; timeline ascending order;
+   header-stats derivation matching the Claims tab; that the composed graph leaks no claim
+   nodes, uses only the 8 UI relationship types, has no plumbing types, no self-loops, every
+   edge endpoint resolving to a node in the same response, and **every claim edge's direction
+   matching a real subject→object claim**; expanding a neighbour; a Deal rendering in the
+   graph despite 404ing on `/api/entities/{id}`; and `ApiError.kind === 'notfound'` on 404s.
+2. **Curvature geometry, 9/9 passed** — lone edge stays straight; 2 edges get opposite arcs;
+   A→B and B→A share one bundle; odd bundles keep a straight middle; arcs evenly spaced and
+   within `MAX_CURVATURE`; **order-independent** (a merge reshuffles the array and arcs must
+   not jump); and against the real 65-edge Sally Beck graph, **no two edges in any bundle
+   share an arc**.
+3. **DOM tests on the real components, 20/20 passed** (vitest + jsdom + testing-library,
+   `fetch` stubbed, every requested URL recorded) — only Person/Organization chips rendered;
+   the correct `entity_type` param sent; search **debounced** (5 keystrokes ≤ 2 requests);
+   pagination driven by the API `total`; "Backend unavailable" + Retry on a network failure
+   and "Something went wrong" + Retry on a 500; ids encoded on the wire but decoded for
+   display; header claim count derived from the claims call; `current` status badge
+   rendering; not-found states with **no** Retry button (retrying a 404 is pointless); the
+   evidence quote highlighted exactly once inside a real body with nested forwarded text;
+   subject/object rendered as plain text; no "To" row; empty quote producing zero `<mark>`s;
+   the drawer fetching `/api/evidence` with an encoded id, degrading to "Source metadata
+   unavailable." on failure, and **not fetching at all while closed**; health counts and a
+   downed service showing as Error.
+
+**Live `/api/chat` — 3 calls total** (within the CLAUDE.md §9 budget; 1 was the timed-out
+attempt that revealed the timeout bug). Confirmed on real responses:
+- `session_id` echoes back and the follow-up reuses the **same** session.
+- `effective_question` populated on the follow-up: *"Tell me about her role"* →
+  *"What is Sally Beck's role at Enron?"*
+- `clarification` non-null with real structured options (`Sally Beck` vs
+  `Fernley Dyson and Sally Beck`), rendered from the structured field only, per §8.2.
+- Citations carry real non-empty `evidence_id`s and quotes, and `message_date` is confirmed
+  **absent** from the response.
+- **Citation `index` values are NOT contiguous** — a real answer cited `[7]`, `[11]`, `[10]`.
+  Day 37's `AnswerText` looks citations up *by* `citation.index` rather than by array
+  position and falls back to plain text on a miss, so this works correctly. Do not "fix" it
+  to index into the array.
+
+`tsc -b` clean. `npm run build` clean (587 kB / 187 kB gzipped). `oxlint` clean apart from the
+same two already-accepted categories: 3 shadcn-generated `only-export-components` and 8
+`react(set-state-in-effect)` on the documented reset-then-fetch effects.
+
+**Not done:** an actual pixel/visual check in a real browser — the standing gap. The graph
+canvas in particular (arrowheads, curved edges, labels on the bezier midpoints) has been
+verified geometrically and mathematically but **never seen rendered**.
+
+### Not done / deferred
+
+- Full health dashboard — Day 42 by design; today's page is the basic version the brief
+  called optional.
+- Merge audit log, conflict review queue — Days 43–44.
+- Caching, request deduplication, optimistic updates — explicitly out of scope. Note that
+  `EntityDetailPage` and `ClaimsTab` each fetch `/claims` independently; that duplicate call
+  is deliberate under this constraint and is where caching would first pay off.
+- Auth beyond the hardcoded `X-User-Clearance: 4`.
+
+### Post-session fix: aborted StrictMode requests were showing as "Backend unavailable"
+
+Reported (with a Network-tab trace): opening the Claims tab fired two requests — the first
+canceled, the second returning a real 200 with real data — but the UI still showed "Backend
+unavailable" instead of the data. `main.tsx` wraps the app in `<StrictMode>`, which
+double-invokes every effect in dev (mount → cleanup → mount again) specifically to surface
+missing-cleanup bugs like this one; the throwaway first mount's fetch is what gets canceled.
+
+**Root cause, found in `src/lib/api.ts`, not in `ClaimsTab.tsx`.** Every one of the 9 rewired
+call sites already had the right *intent* — `catch ((err) => { if (!isAbort(err))
+setError(err) })` — and `isAbort()` itself was written correctly (`err instanceof
+DOMException && err.name === 'AbortError'`). The break was one layer below, in the shared
+transport: `fetchApi`/`postApi`'s `catch (err) { throw ApiError.from(err) }` ran on *every*
+`fetch()` rejection, abort included. `ApiError.from()` only special-cases `TimeoutError`
+explicitly; anything else — including a genuine `AbortError` — fell through to the generic
+`return new ApiError('network', 'Cannot connect to the backend...')` branch. That silently
+converts a harmless cancelled request into a fake "backend unreachable" error, and by the
+time it reaches a page's `.catch`, `err` is an `ApiError` instance, not a `DOMException` —
+so `isAbort(err)` returns `false` and the mis-wrapped abort gets `setError()`'d as real. If
+that rejection lands *after* the second (successful) request's `setClaims()` — which is
+exactly what the timing in a cancel-then-refetch race produces — it overwrites the correct
+data with the error state. Confirmed by literally reverting the fix and re-running the
+repro: the aborted request rejected with `ApiError: Cannot connect to the backend...`, the
+identical string `ApiErrorState` renders as "Backend unavailable."
+
+**Fix, at the one shared root rather than in each page** (per the standing "fix the whole
+class, not the reported instance" rule — this bug was never in `ClaimsTab.tsx`; every one of
+the 9 files using `isAbort()` was equally exposed). `fetchApi`/`postApi` now check for a raw
+abort *before* calling `ApiError.from()` and rethrow it unwrapped:
+```ts
+} catch (err) {
+  if (isRawAbort(err)) throw err   // keep the AbortError identity intact
+  throw ApiError.from(err)
+}
+```
+so `isAbort()` downstream sees the real `DOMException` it was always checking for. No page
+component changed — the fix is entirely in `src/lib/api.ts`.
+
+**Verified two ways**, both ephemeral (`tsx` installed `--no-save`, removed after;
+`package.json`/`package-lock.json` confirmed byte-identical): a script that stubs `fetch()`
+to honor `AbortSignal` and reproduces the exact StrictMode timing (abort request 1
+synchronously, then fire request 2, await both) — 5/5 checks passed against the fixed code,
+including "request 1 rejects with the raw AbortError, not a wrapped ApiError" and "the
+page-level catch pattern does NOT set an error state for the aborted request." Re-ran the
+identical script against the pre-fix code (reverted by hand, not via git — `api.ts` is a new
+untracked file this phase, so `git stash` doesn't apply to it) to confirm it actually fails
+without the fix: 3 of 5 checks failed, with request 1 rejecting as
+`ApiError: Cannot connect to the backend...` — reproducing the reported bug exactly, then
+restored the fix. `tsc -b`, `oxlint` (same 11 pre-existing/accepted warnings, nothing new),
+and `npm run build` all clean afterward.
+
+**Lesson for future days:** a `catch` block's `isAbort(err)` guard is only as good as
+whatever ran before it. The bug wasn't in the code that checked for the abort — it was in a
+shared helper two calls upstream that silently changed the error's type before the check
+ever ran. When several independent call sites share the same defensive pattern and one
+report surfaces a failure, check whether they share a common dependency before assuming the
+bug is local to the reported call site.
+
+### Suggested commit message
+
+```
+Day 41: replace all mock data with live backend integration
+
+Add a centralised API client (src/lib/api.ts) with typed ApiError kinds,
+per-request abort signals, and URL-encoding of colon-bearing entity ids at the
+network boundary. Wire chat, graph, entities, entity detail, evidence and a
+basic health page to the real endpoints; no production code imports src/mocks/.
+
+The graph explorer needed a new data source: /api/graph/{id}/subgraph cannot
+return an entity-to-entity edge at any depth, because claim types live on Claim
+NODES, not on relationships. Compose the graph instead from
+/api/entities/{id}/claims (the 5 claim types, with real direction and
+confidence) plus the subgraph route's Deal/Decision neighbours. Remove the hops
+selector, add arrowheads for the 6 asymmetric relationship types, and open
+entity profiles in a new tab on double-click.
+
+Fix two graph bugs found in verification: symmetric relationships were drawn
+twice (works_with A->B and B->A are one fact), and up to 6 parallel edges
+between one pair stacked into a single unreadable line -- now fanned out with
+curvature, with edge labels moved to the bezier midpoint.
+
+Resolve every mock-only field against the real contract rather than leaving it
+in the types, and split the request timeout: 10s for read-only endpoints, 60s
+for /api/chat, which measurably takes 10.2s and was aborting a fraction of a
+second after the backend had already answered.
+```

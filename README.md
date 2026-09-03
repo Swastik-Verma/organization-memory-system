@@ -808,3 +808,44 @@ npm run dev
 ```
 
 **Pages:** Chat, Graph Explorer, Entities, Entity Detail, Evidence, Health Dashboard, Conflict Review, Merge Audit Log
+
+
+
+
+
+### Running the Full Stack
+
+1. Start databases:
+```bash
+   docker compose up -d
+```
+
+2. Start backend:
+```bash
+   cd backend && source venv/bin/activate
+   python scripts/run_server.py
+```
+
+3. Start frontend:
+```bash
+   cd frontend && npm run dev
+```
+
+4. Open http://localhost:5173 in your browser.
+
+**Note:** If the backend server fails to start silently (no error but changes not
+reflected), check whether a previous server process is still holding port 8000:
+```bash
+lsof -i :8000
+```
+Kill the stale process before restarting.
+
+### API Integration
+
+The frontend connects to the FastAPI backend at `http://localhost:8000`. All API calls
+are centralized in `frontend/src/lib/api.ts`. Entity IDs contain colons and are
+URL-encoded in all API paths.
+
+**Quota note:** The `/api/chat` endpoint calls Gemini (currently `gemini-3.1-flash-lite`)
+on every request. All other endpoints (entities, graph, evidence, health) only query
+Neo4j/Qdrant and do not consume LLM quota.

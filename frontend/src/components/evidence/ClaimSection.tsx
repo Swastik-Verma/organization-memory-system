@@ -1,16 +1,17 @@
 import { ArrowRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { claimStatusColor, claimStatusLabel, claimTypeColor, claimTypeLabel } from '@/lib/claimTypes'
+import { claimTypeColor, claimTypeLabel } from '@/lib/claimTypes'
 import type { EvidenceDetailResponse } from '@/types/evidence'
 
 interface ClaimSectionProps {
   evidence: EvidenceDetailResponse
 }
 
-// The claim subject/object link to /entities/:id and open in a new tab — this page is
-// itself typically reached by opening a link in a new tab (see the Day 40 pre-task fix to
-// EvidenceDrawer.tsx / ClaimCard.tsx), so a further click here shouldn't lose that tab too.
+// Day 41: subject and object render as plain text, not links. EvidenceDetailResponse
+// carries only subject_name / object_name — no ids — and no endpoint resolves a claim to
+// its subject/object entity ids, so a link here could only be built from a fabricated id.
+// The status badge and valid-from/valid-to fields are gone for the same reason: those live
+// on the Claim node and evidence.py's Cypher never selects them. See types/evidence.ts.
 export function ClaimSection({ evidence }: ClaimSectionProps) {
   return (
     <section className="rounded-lg border border-border bg-card p-5">
@@ -23,34 +24,15 @@ export function ClaimSection({ evidence }: ClaimSectionProps) {
         >
           {claimTypeLabel(evidence.claim_type ?? '')}
         </span>
-        <span
-          className={cn(
-            'inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-            claimStatusColor(evidence.status),
-          )}
-        >
-          {claimStatusLabel(evidence.status)}
-        </span>
+        {evidence.claim_id && (
+          <span className="font-mono text-xs text-muted-foreground">{evidence.claim_id}</span>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-base font-medium text-foreground">
-        <Link
-          to={`/entities/${encodeURIComponent(evidence.subject_id)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          {evidence.subject_name}
-        </Link>
+        <span>{evidence.subject_name ?? 'Unknown'}</span>
         <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-        <Link
-          to={`/entities/${encodeURIComponent(evidence.object_id)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          {evidence.object_name}
-        </Link>
+        <span>{evidence.object_name ?? 'Unknown'}</span>
       </div>
 
       <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground sm:grid-cols-3">
@@ -65,14 +47,6 @@ export function ClaimSection({ evidence }: ClaimSectionProps) {
             </div>
             <span>{Math.round((evidence.confidence ?? 0) * 100)}%</span>
           </div>
-        </div>
-        <div>
-          <p className="mb-1">Valid from</p>
-          <p className="text-foreground">{evidence.valid_from ?? 'Unknown'}</p>
-        </div>
-        <div>
-          <p className="mb-1">Valid to</p>
-          <p className="text-foreground">{evidence.valid_to ?? 'Present'}</p>
         </div>
       </div>
     </section>

@@ -135,3 +135,67 @@ export function createCollisionForce(
 
   return force
 }
+
+
+// ---------------------------------------------------------------------------------------
+// Parallel-edge curvature (Day 41)
+// ---------------------------------------------------------------------------------------
+//
+// Two entities routinely hold several different relationships at once. Sally Beck and Brent
+// Price are connected by six separate real claims — works_with, informs in both directions,
+// requests_from, and reports_to in BOTH directions (a genuine contradiction in the extracted
+// data). Drawn as straight lines all six land exactly on top of each other: one thick line
+// with six relationship labels stacked at an identical midpoint. Curving them fans the
+// bundle out into distinguishable arcs.
+//
+// Lives here rather than in GraphCanvas.tsx for the same reason the force tuning does — this
+// module is importable without a DOM or a canvas context, so the real function can be
+// exercised by a test instead of a copy of it.
+
+export const MAX_CURVATURE = 0.45
+
+/** Stable identity for a link, tolerant of force-graph having already replaced the string
+ *  endpoints with node objects once the simulation is running. */
+export function linkId(
+  source: { id: string } | string,
+  target: { id: string } | string,
+  type: string,
+): string {
+  const s = typeof source === 'string' ? source : source.id
+  const t = typeof target === 'string' ? target : target.id
+  return `${s}::${type}::${t}`
+}
+
+/**
+ * Assigns each edge a curvature so parallel edges between the same pair of nodes bow away
+ * from each other instead of overlapping.
+ *
+ * Edges are grouped by UNORDERED pair, so an A->B and a B->A edge belong to the same bundle
+ * and get different arcs rather than two arcs bowing into each other. A pair with a single
+ * edge stays perfectly straight (curvature 0), so the common case is unaffected.
+ */
+export function computeCurvatures(
+  edges: Array<{ source: string; target: string; type: string }>,
+): Map<string, number> {
+  const byPair = new Map<string, Array<{ source: string; target: string; type: string }>>()
+  for (const edge of edges) {
+    const pair = [edge.source, edge.target].sort().join('|')
+    const bundle = byPair.get(pair)
+    if (bundle) bundle.push(edge)
+    else byPair.set(pair, [edge])
+  }
+
+  const curvatures = new Map<string, number>()
+  for (const bundle of byPair.values()) {
+    // Sorted so an edge's arc doesn't reshuffle when a merge changes the array's order.
+    bundle.sort((a, b) =>
+      linkId(a.source, a.target, a.type).localeCompare(linkId(b.source, b.target, b.type)),
+    )
+    const n = bundle.length
+    bundle.forEach((edge, i) => {
+      const curvature = n === 1 ? 0 : -MAX_CURVATURE + (2 * MAX_CURVATURE * i) / (n - 1)
+      curvatures.set(linkId(edge.source, edge.target, edge.type), curvature)
+    })
+  }
+  return curvatures
+}

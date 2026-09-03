@@ -1,8 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { ChatMessage } from '@/components/chat/ChatMessage'
-import { SUGGESTED_PROMPTS } from '@/mocks/chatMocks'
 import type { CitationItem, ConversationEntry } from '@/types/chat'
+
+// Day 41: these moved out of chatMocks.ts (which keyed its fixtures off them) and are now
+// plain starter questions against the real corpus. The "Trigger a network error (demo)"
+// chip is gone — it only existed to drive the mock's error branch, and every one of these
+// now spends real Gemini quota when clicked (CLAUDE.md §9).
+const SUGGESTED_PROMPTS = [
+  'Who does Sally Beck report to?',
+  'Who does Kay Mann work with?',
+  'What is Vincent Kaminski involved in?',
+]
 
 interface ChatMessageListProps {
   entries: ConversationEntry[]

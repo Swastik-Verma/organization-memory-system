@@ -27,7 +27,13 @@ export function claimTypeColor(claimType: string): string {
 // a plain string on the real ClaimResult model, not part of the closed claim-type
 // vocabulary above, so it gets its own small map here rather than overloading the one
 // above.
+//
+// Day 41: the real vocabulary is `current` / `superseded` / `review` (verified against the
+// live graph: 5,538 current, 15 superseded, 33 review). Day 39's mocks used `active` for
+// the healthy state; `current` is now the canonical key and `active` is kept as an alias
+// so nothing regresses if that string appears anywhere else.
 export const CLAIM_STATUS_COLORS: Record<string, string> = {
+  current: 'bg-green-100 text-green-700',
   active: 'bg-green-100 text-green-700',
   superseded: 'bg-slate-100 text-slate-500',
   review: 'bg-amber-100 text-amber-700',

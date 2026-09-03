@@ -48,7 +48,10 @@ async def list_entities(
     params = {"skip": skip, "limit": limit}
 
     if search:
-        conditions.append("toLower(n.canonical_name) CONTAINS toLower($search)")
+        conditions.append(
+            "(toLower(n.canonical_name) CONTAINS toLower($search) "
+            "OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($search)))"
+        )
         params["search"] = search
 
     # Build label filter
@@ -270,6 +273,8 @@ async def get_entity_claims(
     query = f"""
     MATCH (c:Claim)
     WHERE {where_clause}
+    OPTIONAL MATCH (c)-[:SUBJECT]->(subj)
+    OPTIONAL MATCH (c)-[:OBJECT]->(obj)
     RETURN
         c.id AS claim_id,
         c.claim_type AS claim_type,
@@ -281,7 +286,9 @@ async def get_entity_claims(
         c.valid_from AS valid_from,
         c.valid_to AS valid_to,
         c.status AS status,
-        c.mention_count AS mention_count
+        c.mention_count AS mention_count,
+        subj.mention_count AS subject_mention_count,
+        obj.mention_count AS object_mention_count
     ORDER BY c.confidence DESC
     """
 
@@ -301,8 +308,29 @@ async def get_entity_claims(
                 valid_to=str(r["valid_to"]) if r["valid_to"] else None,
                 status=r["status"] or "",
                 mention_count=r["mention_count"] or 0,
+                subject_mention_count=r["subject_mention_count"] or 0,   # ADD THIS
+                object_mention_count=r["object_mention_count"] or 0,     # ADD THIS
                 source="graph",
             ))
+
+        # NEW — fetch evidence for each claim, same pattern as retrieval_engine.py
+        evidence_query = """
+        MATCH (c:Claim {id: $claim_id})-[:SUPPORTED_BY]->(e:Evidence)
+        WHERE e.is_deleted = false
+        OPTIONAL MATCH (e)-[:FROM_MESSAGE]->(m:Message)
+        RETURN
+            e.evidence_id AS evidence_id,
+            e.quote AS quote,
+            m.message_id AS message_id,
+            m.subject AS email_subject,
+            m.from_addr AS from_addr,
+            m.date AS email_date
+        ORDER BY e.confidence DESC
+        LIMIT 5
+        """
+        for claim in claims:
+            ev_result = session.run(evidence_query, claim_id=claim.claim_id)
+            claim.evidence = [dict(r) for r in ev_result]
 
     return EntityClaimsResponse(
         entity_id=entity_id,

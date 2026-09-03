@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { claimTypeColor, claimTypeLabel } from '@/lib/claimTypes'
-import { mockFetchEntityTimeline } from '@/mocks/entityMocks'
+import { ApiErrorState } from '@/components/ApiErrorState'
+import { fetchEntityTimeline, isAbort } from '@/lib/api'
 import type { TimelineEvent } from '@/types/entity'
 
 interface TimelineTabProps {
@@ -11,17 +12,24 @@ interface TimelineTabProps {
 
 export function TimelineTab({ entityId }: TimelineTabProps) {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     setEvents(null)
-    mockFetchEntityTimeline(entityId).then((res) => {
-      if (!cancelled) setEvents(res.events)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [entityId])
+    setError(null)
+    fetchEntityTimeline(entityId, { signal: controller.signal })
+      .then((res) => setEvents(res.events))
+      .catch((err: unknown) => {
+        if (!isAbort(err)) setError(err)
+      })
+    return () => controller.abort()
+  }, [entityId, reloadToken])
+
+  if (error) {
+    return <ApiErrorState error={error} onRetry={() => setReloadToken((n) => n + 1)} />
+  }
 
   if (events === null) {
     return (

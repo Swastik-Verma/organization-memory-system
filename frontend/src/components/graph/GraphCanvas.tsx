@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject } from 'react-force-graph-2d'
 import type { GraphEdge, GraphNode } from '@/types/graph'
 import { entityTypeColor } from '@/lib/entityTypes'
+import { isSymmetricRelationship } from '@/lib/relationshipTypes'
 import {
   CHARGE_STRENGTH,
+  computeCurvatures,
+  linkId,
   EDGE_LABEL_FONT_PX,
   NODE_LABEL_FONT_PX,
   createCollisionForce,
@@ -13,6 +16,7 @@ import {
   nodeRadius,
   truncateLabel,
 } from './graphForces'
+import { type PinController, createPinController } from './nodePinning'
 import { type TooltipController, type TooltipView, createTooltipController } from './tooltipController'
 import { NodeTooltip } from './NodeTooltip'
 
@@ -30,13 +34,42 @@ interface GraphCanvasProps {
 // the deferred single-click action and fires the double-click action instead.
 const DOUBLE_CLICK_WINDOW_MS = 260
 
+// Arrowhead size in graph units, for asymmetric relationships only. Symmetric ones
+// (works_with, negotiating_with) get length 0 — drawing an arrow on them would assert a
+// direction the data doesn't have, since "A works_with B" and "B works_with A" are one fact.
+const ARROW_LENGTH = 4
+// 1 puts the arrowhead at the target end of the line. Pulled back slightly so the head sits
+// just outside the target node's circle instead of being hidden underneath it.
+const ARROW_REL_POS = 0.92
+
+/**
+ * Ticks the force engine runs before freezing.
+ *
+ * Default is Infinity, capped only by cooldownTime (15s) — which is why the layout kept
+ * quietly re-adjusting under the cursor. d3's default alphaDecay (0.0228) is calibrated so a
+ * simulation converges in ~300 ticks, so this both lets the layout fully settle and then
+ * stops it dead, instead of leaving it to drift for the remainder of the 15s window.
+ *
+ * This does NOT break click-to-expand: force-graph calls resetCountdown() internally on
+ * every graphData change (force-graph.mjs, end of the data-update routine), which zeroes
+ * cntTicks and sets engineRunning = true. So each expand gets a fresh 300-tick budget to
+ * lay out the newly-added nodes, then freezes again.
+ */
+const COOLDOWN_TICKS = 300
+
 const RING_COLOR = '#4f46e5' // --primary, marks an already-expanded node
 const EDGE_COLOR = '#1e293b' // dark slate, near-black — visible against the near-white background
 const LABEL_COLOR = '#334155'
 const LABEL_BG = 'rgba(255,255,255,0.88)'
 
 type SimNode = GraphNode & { x?: number; y?: number }
-type SimEdge = GraphEdge & { source: SimNode; target: SimNode; claim_count: number | null }
+type SimEdge = GraphEdge & {
+  source: SimNode
+  target: SimNode
+  claim_count: number | null
+  /** Set by force-graph when linkCurvature is non-zero: the quadratic bezier control point. */
+  __controlPoints?: number[] | null
+}
 
 export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigateNode }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -45,6 +78,8 @@ export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigat
   const [hovered, setHovered] = useState<TooltipView | null>(null)
   const clickState = useRef<{ id: string; timer: number } | null>(null)
   const isReady = size.width > 0 && size.height > 0
+
+  const curvatures = useMemo(() => computeCurvatures(edges), [edges])
 
   // Per-frame label decluttering. The collision force guarantees node labels never overlap
   // each other, but two edges can still cross near their midpoints, where their relationship
@@ -130,14 +165,40 @@ export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigat
     }
   }, [])
 
+  // Pinning needs the current nodes/edges arrays, but the hover handler must stay
+  // useCallback([])-stable or force-graph latches onto a stale closure (the exact bug that
+  // caused the Day 38 stuck tooltip). Reading them through a ref keeps the handler stable
+  // while still seeing current data.
+  const pinRef = useRef<PinController>(createPinController())
+  const graphDataRef = useRef({ nodes, edges })
+  useEffect(() => {
+    graphDataRef.current = { nodes, edges }
+  }, [nodes, edges])
+
+  // Release on unmount so a pinned node isn't left frozen in the shared node objects, which
+  // GraphExplorerPage deliberately reuses across merges.
+  useEffect(() => {
+    const pin = pinRef.current
+    return () => pin.releaseAll()
+  }, [])
+
   const handleNodeHover = useCallback((node: NodeObject<GraphNode> | null) => {
     // force-graph passes null when the pointer moves onto empty canvas, and the new node
     // when it moves straight from one node to another — both handled by hover().
-    tooltipRef.current?.hover((node as GraphNode | null) ?? null)
+    const hoveredNode = (node as GraphNode | null) ?? null
+    tooltipRef.current?.hover(hoveredNode)
+
+    if (hoveredNode) {
+      const { nodes: currentNodes, edges: currentEdges } = graphDataRef.current
+      pinRef.current.pinAround(hoveredNode, currentNodes, currentEdges)
+    } else {
+      pinRef.current.releaseAll()
+    }
   }, [])
 
   const handleBackgroundClick = useCallback(() => {
     tooltipRef.current?.clear()
+    pinRef.current.releaseAll()
   }, [])
 
   // Wired to onEngineTick/onZoom so the tooltip follows its node as the layout settles.
@@ -153,6 +214,9 @@ export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigat
     const current = controller?.current()
     if (controller && current && !nodes.some((n) => n.id === current.id)) {
       controller.clear()
+      // Nothing would fire a hover-out for a node that vanished, so release its pin here or
+      // it stays frozen forever in the node objects the explorer page reuses.
+      pinRef.current.releaseAll()
     }
   }, [nodes])
 
@@ -164,6 +228,7 @@ export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigat
           width={size.width}
           height={size.height}
           graphData={{ nodes, links: edges }}
+          cooldownTicks={COOLDOWN_TICKS}
           nodeRelSize={1}
           onNodeClick={handleNodeClick}
           onNodeHover={handleNodeHover}
@@ -172,6 +237,15 @@ export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigat
           onZoomEnd={handleZoomOrPan}
           onEngineTick={handleZoomOrPan}
           linkColor={() => EDGE_COLOR}
+          linkDirectionalArrowLength={(link) =>
+            isSymmetricRelationship((link as SimEdge).type) ? 0 : ARROW_LENGTH
+          }
+          linkDirectionalArrowRelPos={ARROW_REL_POS}
+          linkDirectionalArrowColor={() => EDGE_COLOR}
+          linkCurvature={(link) => {
+            const l = link as SimEdge
+            return curvatures.get(linkId(l.source, l.target, l.type)) ?? 0
+          }}
           linkWidth={(link) => {
             const claimCount = (link as SimEdge).claim_count
             return 1 + Math.min(claimCount ?? 1, 8) * 0.35
@@ -208,8 +282,17 @@ export function GraphCanvas({ nodes, edges, expandedIds, onExpandNode, onNavigat
             // "works_with" / "informs" text near tightly-packed nodes.
             if (linkLengthPx < estimateTextWidthPx(text, EDGE_LABEL_FONT_PX) * 1.4) return
 
-            const midX = (l.source.x + l.target.x) / 2
-            const midY = (l.source.y + l.target.y) / 2
+            // A curved link is drawn as a quadratic bezier whose control point force-graph
+            // stashes on __controlPoints. Its midpoint is at t=0.5, i.e.
+            // 0.25*P0 + 0.5*C + 0.25*P2 — NOT the straight-line midpoint, which for a curved
+            // edge sits well off the visible line.
+            const control = l.__controlPoints
+            const midX = control
+              ? 0.25 * l.source.x + 0.5 * control[0] + 0.25 * l.target.x
+              : (l.source.x + l.target.x) / 2
+            const midY = control
+              ? 0.25 * l.source.y + 0.5 * control[1] + 0.25 * l.target.y
+              : (l.source.y + l.target.y) / 2
             const fontSize = EDGE_LABEL_FONT_PX / globalScale
             ctx.font = `${fontSize}px sans-serif`
             ctx.textAlign = 'center'

@@ -22,7 +22,8 @@ function renderBody(body: string, quote: string) {
 }
 
 export function SourceEmail({ evidence }: SourceEmailProps) {
-  const { email_from, email_to, email_date, email_subject, email_body, quote } = evidence
+  // No "To" row: EvidenceDetailResponse carries only email_from, with no recipient list.
+  const { email_from, email_date, email_subject, email_body, quote } = evidence
 
   return (
     <section className="rounded-lg border border-border bg-card p-5">
@@ -32,12 +33,6 @@ export function SourceEmail({ evidence }: SourceEmailProps) {
         <div className="flex gap-2">
           <span className="w-14 shrink-0 text-muted-foreground">From</span>
           <span className="text-foreground">{email_from ?? 'Unknown sender'}</span>
-        </div>
-        <div className="flex gap-2">
-          <span className="w-14 shrink-0 text-muted-foreground">To</span>
-          <span className="text-foreground">
-            {email_to.length > 0 ? email_to.join(', ') : 'Unknown recipient'}
-          </span>
         </div>
         <div className="flex gap-2">
           <span className="w-14 shrink-0 text-muted-foreground">Date</span>

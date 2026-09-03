@@ -16,9 +16,10 @@ export function EntityCard({ entity }: EntityCardProps) {
         <EntityTypeBadge type={entity.type} />
         <span className="truncate text-sm font-medium text-foreground">{entity.name}</span>
       </div>
+      {/* No claim count here: the real EntityListItem has no such field, and deriving one
+          would cost an extra request per row. The detail page shows it instead. */}
       <div className="flex shrink-0 items-center gap-4 text-xs text-muted-foreground">
-        <span>{entity.mention_count} mentions</span>
-        <span>{entity.claim_count} claims</span>
+        <span>{entity.mention_count.toLocaleString()} mentions</span>
       </div>
     </Link>
   )

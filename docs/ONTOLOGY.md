@@ -1701,3 +1701,29 @@ parse → retrieve → generate pipeline.
 
 Updated POST /api/chat to accept session_id for multi-turn tracking
 and return effective_question when a follow-up was rewritten.
+
+
+
+
+
+### Day 41 — Backend Model Updates (Frontend Integration)
+
+**ClaimResult model** (`backend/src/api/models.py`):
+- Added `subject_mention_count: int` and `object_mention_count: int` — real mention
+  counts for the subject and object entities involved in each claim, sourced via
+  `OPTIONAL MATCH (c)-[:SUBJECT]->(subj)` and `(c)-[:OBJECT]->(obj)` traversals.
+  Needed by the Graph Explorer to render node sizes accurately from claim-based
+  graph composition.
+
+**Claims route** (`backend/src/api/routes/entities.py`):
+- `/api/entities/{id}/claims` now traverses `(c:Claim)-[:SUPPORTED_BY]->(e:Evidence)`
+  and returns evidence details (evidence_id, quote, message_id, email_subject,
+  email_date) per claim. Previously the `evidence` field defaulted to an empty list
+  because the query never followed the SUPPORTED_BY edge — the data existed in Neo4j
+  but was never read.
+- Added OPTIONAL MATCH for SUBJECT/OBJECT to return per-entity mention counts
+  alongside claims.
+
+**Known limitation:** 96 of 5,586 claims lack a SUBJECT edge, 22 lack an OBJECT edge —
+OPTIONAL MATCH ensures these claims are still returned (with null/0 for the missing
+side) rather than silently dropped.
