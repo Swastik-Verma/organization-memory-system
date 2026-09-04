@@ -6,6 +6,7 @@ interface AttentionNeededCardProps {
 }
 
 const CONFLICTS_HREF = '/conflicts'
+const MERGES_HREF = '/merges'
 
 export function AttentionNeededCard({ pendingReview, conflictPairs }: AttentionNeededCardProps) {
   const allClear = pendingReview === 0 && conflictPairs === 0
@@ -45,6 +46,15 @@ export function AttentionNeededCard({ pendingReview, conflictPairs }: AttentionN
           </a>
         </div>
       )}
+
+      <a
+        href={MERGES_HREF}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 block text-xs font-medium text-primary hover:underline"
+      >
+        View Merge Audit Log &rarr;
+      </a>
     </div>
   )
 }

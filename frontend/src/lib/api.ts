@@ -28,6 +28,7 @@ import type {
   HealthResponse,
   ReviewQueueResponse,
 } from '@/types/health'
+import type { MergeListResponse, MergeUndoResponse } from '@/types/merge'
 
 const API_BASE = 'http://localhost:8000'
 const CLEARANCE = '4'
@@ -99,12 +100,34 @@ export class ApiError extends Error {
   }
 }
 
-function errorForStatus(status: number): ApiError {
-  if (status === 404) return new ApiError('notfound', 'Not found.', 404)
-  if (status >= 500) {
-    return new ApiError('server', 'Something went wrong on the server.', status)
+/**
+ * Every FastAPI HTTPException body is `{ detail: string }`. Read it when present and use it
+ * as the error message instead of the generic per-status-code copy below — added for Day
+ * 43's undo endpoint, which returns meaningful detail text ("already undone", "not found")
+ * that a generic "HTTP 400" message would otherwise throw away. Applied to every caller of
+ * fetchApi/postApi, not just merges, since this was a real gap for any 4xx/5xx response, not
+ * something specific to one endpoint (see CLAUDE.md's "fix the whole class" note). Falls
+ * back to the pre-Day-43 generic text when the body isn't JSON or has no `detail` field, so
+ * no existing page's error copy changes unless the backend actually sent a detail string.
+ */
+async function detailFromResponse(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json()
+    if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string') {
+      return body.detail
+    }
+    return null
+  } catch {
+    return null
   }
-  return new ApiError('client', `Request rejected by the backend (HTTP ${status}).`, status)
+}
+
+function errorForStatus(status: number, detail: string | null): ApiError {
+  if (status === 404) return new ApiError('notfound', detail ?? 'Not found.', 404)
+  if (status >= 500) {
+    return new ApiError('server', detail ?? 'Something went wrong on the server.', status)
+  }
+  return new ApiError('client', detail ?? `Request rejected by the backend (HTTP ${status}).`, status)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -179,7 +202,7 @@ async function fetchApi<T>(path: string, options: RequestOptions = {}): Promise<
     if (isRawAbort(err)) throw err
     throw ApiError.from(err)
   }
-  if (!response.ok) throw errorForStatus(response.status)
+  if (!response.ok) throw errorForStatus(response.status, await detailFromResponse(response))
   return parseJson<T>(response)
 }
 
@@ -204,7 +227,7 @@ async function postApi<T>(
     if (isRawAbort(err)) throw err
     throw ApiError.from(err)
   }
-  if (!response.ok) throw errorForStatus(response.status)
+  if (!response.ok) throw errorForStatus(response.status, await detailFromResponse(response))
   return parseJson<T>(response)
 }
 
@@ -354,4 +377,35 @@ export function fetchReviewQueue(options: RequestOptions = {}): Promise<ReviewQu
 
 export function fetchConflicts(options: RequestOptions = {}): Promise<ConflictListResponse> {
   return fetchApi<ConflictListResponse>('/api/conflicts', options)
+}
+
+// ---------------------------------------------------------------------------------------
+// Merges — GET /api/merges, POST /api/merges/{merge_id}/undo (Day 43)
+// ---------------------------------------------------------------------------------------
+
+/** No `search` param here — the merge audit log's search box filters client-side over the
+ *  already-fetched list (per the Day 43 brief), unlike the entities page's server-side one. */
+export function fetchMerges(
+  params: { phase?: 'exact' | 'fuzzy'; status?: 'active' | 'undone'; strategy?: string } = {},
+  options: RequestOptions = {},
+): Promise<MergeListResponse> {
+  return fetchApi<MergeListResponse>('/api/merges', {
+    ...options,
+    params: {
+      phase: params.phase,
+      status: params.status,
+      strategy: params.strategy,
+    },
+  })
+}
+
+export function undoMerge(
+  mergeId: string,
+  options: RequestOptions = {},
+): Promise<MergeUndoResponse> {
+  return postApi<MergeUndoResponse>(
+    `/api/merges/${encodeURIComponent(mergeId)}/undo`,
+    {},
+    options,
+  )
 }

@@ -1761,3 +1761,51 @@ structure:
   Cypher aggregations across 56k+ nodes per call.
 - Overlapping data in `counts` vs `report.graph_size` is intentional for
   graceful degradation (lightweight check independent of full report).
+
+
+
+## Day 43 — Merge Audit Log
+
+**New API endpoints:**
+
+  GET  /api/merges                  — combined list of Day 16 exact merges (2,024)
+                                      and Day 17 fuzzy merges (1,291), without snapshots.
+                                      Filterable by phase, status, strategy.
+  POST /api/merges/{merge_id}/undo  — undo a Day 17 fuzzy merge. Restores entity
+                                      identity in Neo4j (name, aliases, emails,
+                                      mention_count). Does NOT reassign claims.
+
+**New response models:** MergeItem, MergeListResponse, MergeUndoResponse.
+
+**Data sources:** merge data is read from JSON files on disk
+(`data/processed/entity_resolution_exact.json` → `merge_log`,
+`data/processed/entity_resolution_fuzzy.json` → `merge_operations`),
+not from Neo4j. This is a read-from-file pattern, not typical REST — in
+production, merge status would be stored in a database.
+
+**Undo scope — documented limitation:**
+- Entity identity restoration: YES (creates source node, restores target
+  to pre-merge state using stored snapshots)
+- Claim reassignment: NO — claims keep their current subject_id/object_id.
+  The mapping of which claims belonged to which pre-merge identity was never
+  captured during the Week 3 pipeline. This is inherent to the pipeline
+  design, not a missing feature.
+- Day 16 exact merges: not undoable via UI (no snapshots; deterministic,
+  "undo" = re-run the script)
+
+**Performance fix:** search input on merge page had visible keystroke lag
+(~1.9s per keystroke on full dataset). Root cause was React re-rendering
+all 3,315 table rows on every keystroke, not the filter computation itself
+(3.3ms). Fixed with React.memo() on the table component + debounced search
+input. Per-keystroke React commit: 60.6ms → 1.9ms. Full table re-render
+on clearing search (~390ms for 3,315 rows) remains — deferred to Day 46
+(pagination/virtualization).
+
+**CLAUDE.md updated:** added "Deferred Decisions" section covering the
+Day 35 build-vs-evaluate split, Day 34 accepted flaws, merge undo scope,
+evidence highlighting status, and missing To: field.
+
+**Test artifact:** one fuzzy merge (Jacob → Jake, nickname strategy, 0.85
+confidence) was undone during testing and left undone. This is intentional
+— a single undone merge out of 1,291 does not meaningfully affect the
+evaluation baseline.

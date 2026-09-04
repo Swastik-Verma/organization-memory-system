@@ -292,3 +292,37 @@ class ReviewQueueResponse(BaseModel):
     """Response for GET /api/review-queue."""
     items: list[ReviewItem] = Field(default_factory=list)
     total: int = 0
+
+
+# ------------------------------------------------------------------ #
+# Merges
+# ------------------------------------------------------------------ #
+
+class MergeItem(BaseModel):
+    """One merge in the audit log."""
+    merge_id: Optional[str] = None        # null for Day 16 exact merges
+    source_name: str                       # the entity that was absorbed
+    target_name: str                       # the entity that survived
+    source_id: Optional[str] = None        # null for Day 16
+    target_id: str
+    strategy: str                          # "email_match", "normalized_name_match", "fuzzy", "middle_initial", "nickname", "domain_match"
+    confidence: float
+    timestamp: str
+    status: str = "active"                 # "active" or "undone" (Day 16 are always "active")
+    phase: str                             # "exact" or "fuzzy"
+    undoable: bool = False                 # True only for Day 17 fuzzy merges
+
+
+class MergeListResponse(BaseModel):
+    """Response for GET /api/merges."""
+    merges: list[MergeItem] = Field(default_factory=list)
+    total: int = 0
+    exact_count: int = 0
+    fuzzy_count: int = 0
+
+
+class MergeUndoResponse(BaseModel):
+    """Response for POST /api/merges/{merge_id}/undo."""
+    success: bool
+    message: str
+    merge_id: str

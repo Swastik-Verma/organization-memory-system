@@ -21,6 +21,7 @@ from src.chatbot.conversation import ConversationMemory, FollowUpResolver
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.api.routes.merges import router as merges_router
 
 # Load .env from project root
 _project_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -163,7 +164,7 @@ app.include_router(graph.router, prefix="/api", tags=["Graph"])
 app.include_router(evidence.router, prefix="/api", tags=["Evidence"])
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
-
+app.include_router(merges_router, prefix="/api")
 
 # ------------------------------------------------------------------ #
 # Root endpoint

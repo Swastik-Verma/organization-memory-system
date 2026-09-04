@@ -889,3 +889,46 @@ are preserved unchanged for backward compatibility.
   HealthMonitor) report overlapping node/edge numbers in two different shapes.
   This is intentional: `counts` proves connectivity even if the fuller report
   fails, and both are kept for graceful degradation.
+
+
+
+### Merge Audit Log (`/merges`)
+Filterable table of all 3,315 entity merges across both resolution phases:
+2,024 deterministic exact matches (Day 16: email address and normalized name)
+and 1,291 fuzzy matches (Day 17: middle initial stripping, nickname expansion,
+domain matching, general fuzzy). Filterable by phase (exact/fuzzy), status
+(active/undone), and strategy. Client-side search by entity name with debounced
+input and memoized table rendering. Sortable columns. Undo button on active
+fuzzy merges with a confirmation dialog explaining what will and won't be
+reversed.
+
+**Undo restores entity identity only** (names, aliases, emails, mention counts,
+Neo4j node creation/restoration). Claims are not retroactively reassigned —
+the pipeline never recorded which claims belonged to which pre-merge identity,
+so this information doesn't exist to restore. This is documented as an honest
+scope boundary, consistent with how the project handles similar limitations
+(missing To: field, pipeline_status skip).
+
+**Documented simplifications:**
+- No redo/re-merge endpoint — undone merges can be re-applied by re-running
+  the fuzzy resolution script. A redo endpoint was considered but deferred as
+  unnecessary for the portfolio demo.
+- No entity detail view for undo decisions — the table shows canonical names,
+  strategy, and confidence, but not full alias/email snapshots. The snapshot
+  data exists in the backend and could be exposed via an expandable detail
+  panel (noted as a potential enhancement).
+- Extraction success rate trend over time (from the original plan) was not
+  built — frozen corpus, no historical data exists to chart. Current rate
+  shown as a single metric on the Health dashboard.
+- HealthMonitor's optional pipeline_status deliberately left disabled on the
+  Health dashboard — no data_dir passed, no consumer needs it.
+
+**Backend:** two new endpoints (`GET /api/merges`, `POST /api/merges/{id}/undo`)
+read merge data from the Week 3 resolution JSON files on disk. In production,
+merge status would be stored in a database rather than rewritten to a 10MB
+JSON file.
+
+**Performance:** search keystroke lag fixed — root cause was unthrottled full
+table re-rendering (not the filter itself). React.memo() + debounce reduced
+per-keystroke cost from ~60ms to ~2ms. Full re-render on clearing search
+(~390ms) deferred to Day 46 (virtualization).

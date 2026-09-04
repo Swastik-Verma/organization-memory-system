@@ -1538,3 +1538,252 @@ due to whitespace/newline differences; the whitespace-normalization fix
 mentioned in the Day 41 log was never actually implemented. Not fixed today,
 per the brief.
 ```
+
+---
+
+## Day 43 — Merge Audit Log UI
+
+### What was built
+
+Replaced the `/merges` placeholder with a full merge audit log: filterable/sortable table of
+all 3,315 entity merges (2,024 exact + 1,291 fuzzy) with undo on active fuzzy merges. Backend
+route (`GET /api/merges`, `POST /api/merges/{merge_id}/undo`) and its models were already
+built by hand before this session (uncommitted `backend/src/api/app.py`/`models.py` diffs +
+new `backend/src/api/routes/merges.py`) — confirmed live via curl per CLAUDE.md §5, not
+modified.
+
+**New files:**
+- `src/types/merge.ts` — `MergeItem`/`MergeListResponse`/`MergeUndoResponse`, mirroring the
+  confirmed backend shape.
+- `src/lib/mergeTypes.ts` — strategy/phase/status badge colors and labels, same pattern as
+  `entityTypes.ts`/`claimTypes.ts`.
+- `src/components/merges/MergeFilterBar.tsx` — phase/status segmented controls, a native
+  `<select>` strategy dropdown, and a client-side search input.
+- `src/components/merges/MergeTable.tsx` — sortable columns (click a header to toggle
+  asc/desc), strategy/phase/status pills, Undo button gated on `merge.undoable`.
+- `src/components/merges/UndoMergeDialog.tsx` — confirmation dialog using the newly-installed
+  shadcn `alert-dialog` (`npx shadcn add alert-dialog`; built on the already-installed
+  `@base-ui/react/alert-dialog`, no new npm dependency — `package.json`/`package-lock.json`
+  unchanged).
+- `src/pages/MergesPage.tsx` (rewritten) — orchestrator: fetches on phase/status/strategy
+  change (server-side params) and after a successful undo; search and sort are client-side
+  over the loaded page. Dismissible success/error banner (no toast library added — none
+  exists in this app yet, and adding one wasn't in scope). No pagination, per the brief —
+  3,315 rows client-rendered in one table.
+
+**Small additive edits:**
+- `src/components/layout/Sidebar.tsx` — added "Merges" (lucide `GitMerge` icon) as the 5th
+  nav item, after Health.
+- `src/components/health/AttentionNeededCard.tsx` — added a persistent "View Merge Audit
+  Log →" link (opens `/merges` in a new tab), so the health dashboard has a direct path to
+  the audit log in addition to the sidebar.
+- `src/lib/api.ts` — added `fetchMerges()`/`undoMerge()`, plus a real cross-cutting fix (see
+  below).
+
+### Spec-vs-backend mismatch: strategy vocabulary
+
+The brief lists the fuzzy-strategy dropdown as `email_match, normalized_name_match,
+middle_initial, nickname, domain_match`. **Verified live against `GET /api/merges` that this
+is wrong**: the backend has zero merges with strategy `middle_initial`, and the domain-based
+strategy is actually spelled `same_domain`, not `domain_match`. Real observed strategies,
+confirmed with a `curl | jq` breakdown by phase:
+- exact phase → `email_match` (1,262), `normalized_name_match` (762)
+- fuzzy phase → `fuzzy` (792), `same_domain` (296), `nickname` (203)
+
+The strategy dropdown (`MergeFilterBar.tsx`) is hardcoded to these 5 real values, not the
+brief's list — using the brief's spelling would have made the "Same Domain" filter silently
+return zero rows forever. `mergeTypes.ts` keeps label/color entries for `domain_match` and
+`middle_initial` too, in case a future resolution run ever produces them.
+
+### Real gap found and fixed: the shared API client discarded the backend's actual error text
+
+The brief's undo-error requirement ("show the error message from the API") exposed a
+pre-existing, general gap in `src/lib/api.ts` dating to Day 41: `errorForStatus()` only ever
+returned a generic per-status-code string ("Request rejected by the backend (HTTP 400).")
+and never looked at the response body, even though every FastAPI `HTTPException` sends a
+real `{"detail": "..."}` message (e.g. the undo route's "Merge {id} is already undone" / "not
+found"). This wasn't unique to merges — `ChatPage.tsx`'s `chatErrorMessage()` and
+`ApiErrorState.tsx` would have shown the same generic text for any 4xx/5xx on any endpoint.
+
+Fixed at the shared root rather than only for the undo call (per the standing "fix the whole
+class" rule): both `fetchApi` and `postApi` now call a new `detailFromResponse()` before
+constructing the `ApiError`, which reads the JSON body's `detail` field when present and
+falls back to the original generic text otherwise — so no existing page's copy changes
+unless the backend actually sent a `detail` string. Verified with an ephemeral
+vitest+jsdom test (stubbed a 400 with `{"detail": "Merge fuzzy-001 is already undone"}`):
+the undo banner shows that exact string, not "Request rejected by the backend...". This is
+an unrequested but narrowly-scoped, backward-compatible fix to shared infrastructure — flagged
+here explicitly rather than silently bundled in, per CLAUDE.md §5.
+
+### Verification
+
+No real browser available (same standing Playwright/`libnspr4`/`libnss3` blocker as every
+prior day). Used the same ephemeral `vitest`+`jsdom`+`@testing-library/react`/`user-event`+
+`jest-dom` install as every prior day (`--no-save`; `package.json`/`package-lock.json`
+confirmed byte-identical via md5sum before and after, both installs fully removed
+afterward). Two ephemeral test files, deleted after:
+
+1. **`MergesPage`, 9/9 passed**: initial load renders all 5 fixture rows with the correct
+   "N exact + M fuzzy" subtitle; Undo buttons appear only on active+undoable fuzzy rows (2 of
+   5); phase/status/strategy filters each re-fetch with the correct query param and narrow
+   the table; the search box filters client-side with **no additional fetch call**; clicking
+   Undo opens the dialog with the correct source/target names substituted in; confirming
+   calls the undo endpoint exactly once, closes the dialog, shows the API's success message,
+   and re-fetches the table; cancelling calls the undo endpoint zero times; clicking a column
+   header sorts ascending then descending; an unmatched search shows "No merges match your
+   filters."
+2. **Undo error handling, 1/1 passed**: the detail-parsing fix above, in isolation.
+
+**Never called the real undo endpoint** — the session brief explicitly says not to actually
+undo any merges today; all verification used a stubbed `fetch`. Confirmed via a `curl -X
+POST` to a nonexistent merge id (`404`, doesn't touch real data) that the route exists and
+returns JSON, without touching any real merge record.
+
+`tsc -b` clean. `npm run build` clean (957 kB / 292 kB gzipped — the alert-dialog primitive
+added negligible size; the >500KB warning is the same pre-existing note from Days 38/42, not
+addressed here for the same reason). `oxlint` clean apart from the same already-accepted
+warning categories from every prior day, plus one new instance of the already-documented
+`react(set-state-in-effect)` pattern on `MergesPage.tsx`'s own reset-then-fetch effect
+(identical shape to `EntitiesPage.tsx`/`HealthPage.tsx`/etc.).
+
+**Not done:** an actual pixel/visual check in a real browser — the standing gap since Day 36.
+
+### Not done / deferred
+
+- Actually undoing a merge against the live backend — deferred to manual verification outside
+  this session, per the brief.
+- Server-side pagination — explicitly out of scope; all 3,315 rows render client-side.
+- A toast notification library — the success/error banner is a plain dismissible inline
+  element instead, since no toast primitive exists anywhere in this app yet and adding one
+  wasn't asked for.
+- CLAUDE.md's new "Deferred Decisions" section (Step 7 of the brief) was added at the end of
+  the file.
+
+### Post-session fix: search box input lag (measured, root cause was NOT the filtering)
+
+Reported: typing in the merge audit log's search box lagged badly, with the suspicion that
+"filtering runs synchronously on every keystroke against the full ~3,315-row dataset with no
+debouncing."
+
+**Measured before assuming.** Built an ephemeral vitest+jsdom harness that generated 3,315
+rows in the real 2,024-exact/1,291-fuzzy split, mounted the real `MergesPage`, wrapped it in a
+React `<Profiler>`, and timed each keystroke. jsdom is slower than a real browser in absolute
+terms, so only ratios and before/after deltas are meaningful — but they were unambiguous:
+
+| measurement (before) | result |
+|---|---|
+| filter + sort over all 3,315 rows | **3.3 ms per keystroke** |
+| one full render of the 3,315-row table | **1,869 ms** |
+| typing "sally" (5 chars) | **2,752 ms total**, per-keystroke `[1923, 466, 165, 112, 86]` ms |
+| React commit for the last keystroke | **60.6 ms** |
+
+**The filtering was never the problem — it was ~0.1% of the cost.** The giveaway is the
+per-keystroke shape: it *falls* from 1,923 ms to 86 ms as the query gets longer. Filtering
+work is constant (it always scans all 3,315 rows regardless of query length), so a
+filtering-bound cost would have been flat. What actually falls as the query narrows is the
+number of `<tr>`s React has to reconcile and jsdom has to mutate. The cost tracked rows
+rendered, not characters filtered.
+
+**Root cause:** `MergeTable` renders one row per merge — up to 3,315 rows × 8 cells, 3 badge
+pills each, plus a Button with an icon on all 1,291 fuzzy rows — and it is neither paginated
+nor virtualised (the Day 43 brief explicitly forbade pagination). Every keystroke called
+`setSearch`, which recomputed `visibleMerges` and re-rendered that entire table
+**synchronously**. Because the search box is a *controlled* input (`value={search}`), the
+browser cannot paint the typed character until that render commits — so the multi-hundred-
+millisecond table render landed as lag on the input itself, which is exactly what was felt.
+
+**Fix — three parts, all necessary:**
+1. **Debounce (250 ms).** `search` (drives the input) is now separate from `debouncedSearch`
+   (drives the filtering), with the standard `useEffect` timer, same pattern as
+   `EntitiesPage.tsx`'s 300 ms server-side search. Turns one expensive render per keystroke
+   into one per typing pause.
+2. **`React.memo` on `MergeTable`.** *The debounce alone would not have fixed this.* Every
+   keystroke still re-renders `MergesPage`, and React re-renders children regardless of
+   whether their props changed — so the table would still have reconciled all 3,315 rows per
+   keystroke, just with identical data. memo() is what actually stops the work.
+3. **Referentially stable props**, without which memo() is a no-op: `sortKey`/`sortDir` were
+   merged into a single `sort` state object so `handleSort` could become a dependency-free
+   `useCallback` (two separate setState calls would have needed the current key in scope,
+   making the handler a new function every render); `visibleMerges` is memoised on
+   `debouncedSearch` rather than `search`; `onUndoClick` was already a stable state setter.
+
+Also extracted the filter+sort into **`src/lib/mergeFilter.ts`** (`filterAndSortMerges`), so a
+test exercises the real function rather than a copy — the same reason Day 38 exported
+`graphForces.ts` and Day 42 exported `sortedBuckets`. While there, it re-uses one
+`Intl.Collator` instead of calling `localeCompare` per comparison, and parses each timestamp
+once (decorate–sort–undecorate) instead of ~2n·log n times inside the comparator. That's
+tidiness, not the fix — it was already only 3 ms.
+
+**After, same harness, same machine:**
+
+| measurement (after) | before → after |
+|---|---|
+| typing "sally" (5 chars) | 2,752 ms → **98.8 ms** (~28× faster) |
+| per-keystroke | `[1923, 466, 165, 112, 86]` → `[55, 17, 10, 9, 9]` ms |
+| React commit per keystroke | 60.6 ms → **1.9 ms** (~32× less work) |
+| debounce flush | one single commit of 389.7 ms, once the user pauses |
+
+The 1.9 ms per-keystroke commit is the proof the table is no longer re-rendering while
+typing — that figure is just the filter bar's own input update. (One caveat on reading these
+numbers: the harness's "debounce flush wall time" of ~7 s is a testing-library polling
+artifact from re-querying a multi-thousand-row jsdom DOM, **not** a user-visible delay; the
+389.7 ms commit is the real figure. The "full table render" measurement also drifted between
+runs, 1,869 ms vs 2,816 ms, from machine noise on an identical code path — memo() does not
+affect a cold mount.)
+
+**Verified, 11/11 passed** (ephemeral vitest+jsdom, removed after; `package.json`/
+`package-lock.json` md5s confirmed byte-identical): `filterAndSortMerges` filters on either
+entity name case-insensitively, handles whitespace-only and no-match queries, **produces
+byte-identical ordering to the previous `localeCompare`/`new Date()` implementation** for
+name, timestamp and confidence sorts (so the collator swap changed speed, not behaviour), and
+does not mutate its input; the input reads `"enron"` immediately after typing while the table
+still shows all 5 rows, then catches up after the debounce; a fast burst of keystrokes filters
+**once**, never on intermediate prefixes; and every Day 43 behaviour still works — phase/
+status/strategy server-side refetches, column sort toggling, the undo dialog and its success
+banner, the empty state, and a search typed while a filter refetch is in flight surviving that
+refetch ("Showing 1 of 3 merges"). `tsc -b`, `npm run build` and `oxlint` all clean, with the
+oxlint warning count unchanged at 13 (the debounce timer is inside a `setTimeout` callback, so
+it adds no new `set-state-in-effect` warning).
+
+**Known remaining limitation, not fixed:** the fix removes the *per-keystroke* cost, but the
+one render that happens after the pause still reconciles the whole filtered result set —
+389.7 ms in jsdom for 415 rows. Clearing the search box back to all 3,315 rows is still the
+single most expensive interaction on the page. The real remedy is pagination or row
+virtualisation, which the Day 43 brief explicitly deferred ("3,315 rows is manageable for a
+portfolio demo... don't pre-optimize"). Flagging it here rather than deciding unilaterally.
+
+### Suggested commit message
+
+```
+Day 43: merge audit log UI — filterable/sortable table of all 3,315 entity
+merges (2,024 exact + 1,291 fuzzy), confirmation dialog + undo for active
+fuzzy merges, sidebar entry and a health-dashboard link
+
+Hardcode the strategy filter to the real 5 values confirmed live against
+GET /api/merges (email_match, normalized_name_match, fuzzy, nickname,
+same_domain) rather than the brief's list, which names a nonexistent
+"middle_initial" strategy and misspells "same_domain" as "domain_match".
+
+Fix a real Day-41-era gap in src/lib/api.ts: fetchApi/postApi discarded
+every backend HTTPException's actual `detail` message in favor of a
+generic "HTTP 400" string. Both now surface the real detail text when
+present, falling back to the old generic copy otherwise -- fixes the
+undo dialog's error message and every other endpoint's error handling
+at the same time.
+
+Add CLAUDE.md's "Deferred Decisions" section per the Day 43 brief.
+
+Fix search box input lag, measured rather than assumed: the filtering was
+never the bottleneck (3.3ms over all 3,315 rows). The cost was re-rendering
+the un-virtualised 3,315-row table synchronously on every keystroke, which
+blocked the controlled input from painting the typed character. Debounce
+the search at 250ms, memo() the table, and make its props referentially
+stable (single sort-state object + useCallback) so memo actually applies --
+without the memo the debounce alone would still have reconciled every row
+per keystroke. Typing 5 characters: 2,752ms -> 98.8ms; per-keystroke React
+commit 60.6ms -> 1.9ms.
+
+Extract the filter/sort into src/lib/mergeFilter.ts so tests exercise the
+real function, reusing one Intl.Collator and parsing each timestamp once;
+verified to produce ordering identical to the previous implementation.
+```
