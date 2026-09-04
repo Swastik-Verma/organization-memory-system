@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { EntityCard } from '@/components/entity/EntityCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,11 +24,18 @@ const PAGE_SIZE = 10
 const SEARCH_DEBOUNCE_MS = 300
 
 export function EntitiesPage() {
+  // Day 42: the health dashboard's "Top Mentioned Entities" table links here as
+  // `/entities?search=<name>` (it has no real entity id to link to directly, only a
+  // Person's name from the health report). Read that once on mount so the link actually
+  // pre-fills the search box instead of landing on an unfiltered list.
+  const [searchParams] = useSearchParams()
+  const initialSearch = searchParams.get('search') ?? ''
+
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialSearch)
   const [skip, setSkip] = useState(0)
 
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch)
 
   const [entities, setEntities] = useState<EntityListItem[] | null>(null)
   const [total, setTotal] = useState(0)

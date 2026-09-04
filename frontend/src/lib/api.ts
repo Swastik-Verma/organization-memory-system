@@ -23,7 +23,11 @@ import type {
 import type { ChatResponse } from '@/types/chat'
 import type { GraphSearchResponse, SubgraphResponse } from '@/types/graph'
 import type { EvidenceDetailResponse } from '@/types/evidence'
-import type { HealthResponse } from '@/types/health'
+import type {
+  ConflictListResponse,
+  HealthResponse,
+  ReviewQueueResponse,
+} from '@/types/health'
 
 const API_BASE = 'http://localhost:8000'
 const CLEARANCE = '4'
@@ -337,4 +341,17 @@ export function fetchEvidence(
 
 export function fetchHealth(options: RequestOptions = {}): Promise<HealthResponse> {
   return fetchApi<HealthResponse>('/api/health', options)
+}
+
+// ---------------------------------------------------------------------------------------
+// Admin — review queue and conflicts (Day 42: added for the health dashboard's "Attention
+// Needed" card; see src/types/health.ts for the response shapes).
+// ---------------------------------------------------------------------------------------
+
+export function fetchReviewQueue(options: RequestOptions = {}): Promise<ReviewQueueResponse> {
+  return fetchApi<ReviewQueueResponse>('/api/review-queue', options)
+}
+
+export function fetchConflicts(options: RequestOptions = {}): Promise<ConflictListResponse> {
+  return fetchApi<ConflictListResponse>('/api/conflicts', options)
 }

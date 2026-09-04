@@ -1727,3 +1727,37 @@ and return effective_question when a follow-up was rewritten.
 **Known limitation:** 96 of 5,586 claims lack a SUBJECT edge, 22 lack an OBJECT edge —
 OPTIONAL MATCH ensures these claims are still returned (with null/0 for the missing
 side) rather than silently dropped.
+
+
+
+
+## Day 42 — Health Dashboard
+
+No new entity types, relationships, or graph schema changes.
+
+**API change:** `GET /api/health` response model (`HealthResponse`) gained one
+new optional field: `report: Optional[dict]`. Contains the full output of
+`HealthMonitor.full_health_report()` when available, `null` on failure. Nested
+structure:
+
+  report.graph_size          — node/edge counts by label
+  report.claim_quality       — avg/min/max confidence, confidence_distribution
+                               (variable bucket count, keyed by range string),
+                               claims_by_type, evidence_coverage,
+                               evidence_verification (total/verified/rate)
+  report.temporal_health     — claims_by_status, conflict_pairs, date_range
+  report.access_levels       — per-content-type access level distribution
+  report.entity_stats        — person/org counts, top_persons (array of
+                               {name, mentions})
+  report.data_quality        — structural issue counts, quality_score (0–100)
+
+`pipeline_status` is absent by design (no `data_dir` passed). The original
+`status`, `services`, and `counts` top-level fields are unchanged.
+
+**Design decisions documented:**
+- No extraction-success-rate trend chart — frozen corpus has no temporal
+  ingestion history to plot; single-metric display instead.
+- No auto-polling — manual refresh only; `full_health_report()` runs live
+  Cypher aggregations across 56k+ nodes per call.
+- Overlapping data in `counts` vs `report.graph_size` is intentional for
+  graceful degradation (lightweight check independent of full report).

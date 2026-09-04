@@ -1351,3 +1351,190 @@ in the types, and split the request timeout: 10s for read-only endpoints, 60s
 for /api/chat, which measurably takes 10.2s and was aborting a fraction of a
 second after the backend had already answered.
 ```
+
+---
+
+## Day 42 — Health Dashboard
+
+### What was built
+
+Replaced the Day 41 "basic version" `/health` page with the full control-room dashboard,
+built entirely against the live `/api/health`, `/api/review-queue`, and `/api/conflicts`
+endpoints — no mocks. The backend's `/api/health` route and `HealthResponse` model were
+already expanded by hand before this session (a `report: Optional[dict]` field carrying
+`HealthMonitor.full_health_report()`) — visible as the uncommitted working-tree diff to
+`backend/src/api/models.py` and `backend/src/api/routes/health.py` present at session start.
+Not modified by this session, per CLAUDE.md §5. Confirmed the shape live with
+`curl http://localhost:8000/api/health | jq` before writing any types, matching the brief's
+CONFIRMED shape exactly, including the 2-key (not 5-key) `confidence_distribution` on this
+corpus.
+
+**Installed:** `recharts` (the tech-stack-specified charting library), `^3.10.1`.
+
+**Types** (`src/types/health.ts`, rewritten) — `HealthResponse.report` is now
+`HealthReport | null` (was missing entirely on Day 41's basic page, which only read
+`status`/`services`/`counts`). Added `HealthReport` and its six nested sections
+(`graph_size`, `claim_quality`, `temporal_health`, `access_levels`, `entity_stats`,
+`data_quality`) typed field-for-field against the confirmed JSON — `confidence_distribution`
+and `claims_by_type` are `Record<string, number>` specifically because the backend omits
+empty buckets as absent keys rather than sending them as 0. Also added `ConflictItem`/
+`ConflictListResponse`/`ReviewItem`/`ReviewQueueResponse`, mirroring `models.py`'s Admin
+section — only `.total` is used today, but the full item shapes are there for Days 43-44 to
+build on rather than being redefined later.
+
+**API** (`src/lib/api.ts`): added `fetchReviewQueue()` and `fetchConflicts()`. Only
+`fetchReviewQueue` is actually called from the dashboard — `fetchConflicts` is exported per
+the brief's Step 2 for future use, but the "Conflict Pairs" stat comes from
+`report.temporal_health.conflict_pairs` (already present in the one `/api/health` call), so
+the page deliberately does not make a second network call just to re-derive a number it
+already has.
+
+**Components** (`src/components/health/`, all new): `StatCard`, `ConfidenceDistributionChart`
+and `ClaimsByTypeChart` (Recharts `BarChart`s, indigo `#4f46e5`, rounded bar corners),
+`ServiceStatusCard`, `AttentionNeededCard`, `ClaimsByStatusCard`, `TopEntitiesTable`, and a
+`formatters.ts` (`formatCount`, `formatPercent`, `scoreColorClass` — the ≥95 green / ≥85 amber
+/ <85 red traffic light, shared logic in case a future stat wants the same threshold).
+`ConfidenceDistributionChart` exports its bucket-sorting function (`sortedBuckets`) the same
+way Day 38's `graphForces.ts` exported pure geometry logic — so a test exercises the real
+sort, not a re-implementation, and it's verified never to assume a fixed 5-bucket shape.
+
+**`pages/HealthPage.tsx`** (rewritten): fetches `/api/health` and `/api/review-queue` in
+parallel on mount and on a manual "Refresh" button click (`reloadToken` pattern, same as every
+other page) — **no polling/auto-refresh**, per the brief: `full_health_report()` runs several
+live aggregation queries over the whole graph, and the corpus is frozen, so an interval would
+only add real query load for zero benefit. The review-queue fetch is best-effort and
+independent of the primary health fetch: on failure it renders "—" for Pending Review without
+blocking or erroring the rest of the dashboard (only a failed `/api/health` shows the
+centered error+Retry state and suppresses the whole dashboard, per the brief's explicit "do
+NOT show a half-loaded dashboard" instruction). `report === null` (the lightweight check
+succeeded but the full report failed backend-side) is handled per-section: `ServiceStatusCard`
+still renders normally since it reads only the top-level `services` array, while every
+report-dependent card/chart shows a "Detailed metrics unavailable" message instead of crashing
+or showing fabricated zeros.
+
+**Sidebar:** already had a "Health" link (added Day 36, `Waves` icon) — the brief's Step 5
+assumed only 4 items existed and Health needed adding as a 5th; checked `Sidebar.tsx` and
+found Health was already the 4th of 4 links. No sidebar change was needed or made.
+
+### A real gap found and fixed: `/entities?search=<name>` didn't do anything
+
+The brief's Top Mentioned Entities table links each name to `/entities?search=<name>`
+(a fallback since the health report only carries a person's name and mention count, no entity
+id). `EntitiesPage.tsx` did not read any URL query param on mount — the link would have landed
+on an unfiltered entity list with an empty search box, silently not doing what it visually
+promises. Fixed by reading `search` from `useSearchParams()` once on mount and using it to
+initialize both `search` and `debouncedSearch` state (initializing both avoids one wasted
+300ms-debounced round trip on first load). This is the one change made to a page outside
+today's new health files — small and scoped to making today's own new link work, not a
+broader refactor of `EntitiesPage.tsx`.
+
+### Verification
+
+No real browser available (same standing Playwright/`libnspr4`/`libnss3` blocker as every
+prior day). Used the same ephemeral `vitest` + `jsdom` + `@testing-library/react`/`user-event`
++ `jest-dom` install as Days 36-41 (`--no-save`, fully removed after; `package.json`/
+`package-lock.json` confirmed byte-identical before and after via md5sum). One test file,
+19/19 checks passed against the real components with `fetch` stubbed to the CONFIRMED
+`/api/health` shape (cross-checked against a live curl earlier in the session) plus a live
+`/api/review-queue`/`/api/conflicts` check (33 pending review, 25 conflict pairs, matching the
+report's own `temporal_health.claims_by_status.review: 33`):
+
+- `sortedBuckets` sorts the real 2-bucket distribution descending, handles a hypothetical
+  5-bucket distribution without assuming a fixed shape, and returns `[]` (never throws) on an
+  empty distribution.
+- Loading state renders before data arrives, then the full dashboard.
+- All 6 stat cards show correctly formatted values from the real report shape: `8,595`
+  (Message), `25,032` (Person+Org+Deal summed), `5,586` (Claim), `97.9 / 100` (quality score,
+  with the green `text-emerald-600` class at ≥95), `95.0%` (average_confidence × 100, 1dp),
+  `96.7%` (verification_rate).
+- Service status renders a service's `name`/`detail` text; a down service (`status: "error"`)
+  gets a red dot scoped to *that service's own row*, not any row.
+- Attention Needed shows the real pending-review and conflict-pair counts, both rows are
+  `<a href="/conflicts" target="_blank" rel="noopener noreferrer">`; shows "All clear" when
+  both are 0; shows "—" for pending review (without blocking the rest of the page) when the
+  review-queue fetch fails.
+- Claims by Status shows Current/Review/Superseded with correct counts and labels.
+- Top Mentioned Entities links each name to a correctly URL-encoded `/entities?search=`,
+  opening in a new tab.
+- `report: null` renders "Detailed metrics unavailable" (found via `getAllByText`, multiple
+  sections) instead of crashing, while Service Status still renders normally.
+- A failing `/api/health` shows the centered error state with a Retry button and **no**
+  half-loaded dashboard (`Emails Processed` provably absent from the DOM); clicking Retry
+  re-fetches and recovers into the full dashboard.
+- The manual Refresh button re-fetches `/api/health` (call count asserted to increment).
+- "Last updated" renders from `report.timestamp`.
+- The `EntitiesPage` fix: navigating to `/entities?search=Kay%20Mann` pre-fills the search
+  input with "Kay Mann" and fires the real fetch with `search=Kay...` in the query string.
+
+`tsc -b` clean. `npm run build` clean (943 kB / 288 kB gzipped — the Recharts SVG renderer is
+the main addition over Day 41's 587 kB/187 kB; not addressed, consistent with Day 38's
+decision not to address `force-graph`'s bundle-size warning either). `oxlint` clean apart from
+the same already-accepted warning categories from every prior day, plus two new instances of
+already-documented patterns: `react(set-state-in-effect)` on `HealthPage.tsx`'s own
+fetch-on-mount effect (identical shape to `EntitiesPage.tsx`/`EntityDetailPage.tsx`/etc.), and
+`react(only-export-components)` on `ConfidenceDistributionChart.tsx` for exporting
+`sortedBuckets` alongside the component — the same tradeoff Day 38 made exporting
+`graphForces.ts`'s pure logic so a test exercises the real function instead of a copy.
+
+**Not done:** an actual pixel/visual check in a real browser — the standing gap since Day 36.
+The Recharts bar charts in particular (`ResponsiveContainer` needs a real `ResizeObserver` and
+real layout to size itself) were verified via a `ResizeObserver` stub in jsdom, which confirms
+the components don't crash and their surrounding DOM/text is correct, but does **not** confirm
+actual pixel rendering, bar proportions, or that the charts are visually legible. This is a
+real gap, not a formality — flag it first if a real browser becomes available.
+
+### Step 6 — Evidence highlighting verification result
+
+**Evidence highlighting: STILL BROKEN — needs fix.**
+
+Tested directly against live data rather than by inspecting code alone: took Sally Beck's
+real `/api/entities/{id}/claims` (247 claims), fetched real evidence via
+`/api/evidence/{evidence_id}` for the first 8 claims that had evidence, and checked whether
+`SourceEmail.tsx`'s current highlighting logic (`email_body.includes(quote)`, unchanged since
+Day 40 — no whitespace normalization was ever added) would find each quote in its body.
+**5 of 8 failed** the plain `includes()` check; all 8 passed when both strings were normalized
+by collapsing whitespace (`quote.split(/\s+/).join(' ')` equivalent) before comparing — i.e.
+the mismatch is exactly the `\n`-vs-space class of bug the brief described, not something
+else. Confirms the whitespace-normalization fix mentioned in the Day 42 brief as
+"may or may not have been implemented" was in fact **not** implemented — `SourceEmail.tsx`'s
+`renderBody()` is unchanged from Day 40. Per the brief's explicit instruction, **not fixed
+today** — documented here for a future session. The fix, when it happens, needs to normalize
+both `quote` and `email_body` the same way before the `includes`/`split` call (and ideally
+render highlighting against the *original* unnormalized body text, not a mangled copy, since
+`SourceEmail` displays the raw body verbatim in a `<pre>`).
+
+### Not done / deferred
+
+- A real pixel/visual check of the charts and the whole page — standing gap, see above.
+- `fetchConflicts()` is implemented in `src/lib/api.ts` per the brief but not called from any
+  page today — `report.temporal_health.conflict_pairs` already covers the one number the
+  dashboard needs. A dedicated `/conflicts` page (Day 44) will be the first real caller.
+- Evidence highlighting fix — confirmed broken, intentionally not fixed today (Step 6).
+- Trend-over-time chart, `pipeline_status` UI, dark mode — explicitly out of scope per the
+  brief.
+
+### Suggested commit message
+
+```
+Day 42: health dashboard — full control-room view of graph quality metrics
+
+Add the nested HealthReport types (graph_size, claim_quality, temporal_health,
+access_levels, entity_stats, data_quality) matching the backend's newly
+expanded /api/health response, plus fetchReviewQueue/fetchConflicts. Rebuild
+HealthPage as a real dashboard: 6 summary stat cards, a confidence-distribution
+and claims-by-type Recharts bar chart, service status, an Attention Needed card
+linking to /conflicts, claims-by-status breakdown, and a top-mentioned-entities
+table -- all fetched once on load plus a manual Refresh button, no polling.
+Handles report: null per-section rather than crashing or showing fake zeros.
+
+Fix a real gap found while wiring the new page: EntitiesPage never read a
+?search= query param, so the dashboard's "link to /entities?search=<name>"
+fallback silently did nothing. EntitiesPage now seeds its search state from
+the URL on mount.
+
+Verify (Step 6): evidence quote highlighting is still broken on real data --
+5 of 8 sampled real claims fail the plain email_body.includes(quote) check
+due to whitespace/newline differences; the whitespace-normalization fix
+mentioned in the Day 41 log was never actually implemented. Not fixed today,
+per the brief.
+```

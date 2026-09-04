@@ -254,6 +254,7 @@ class HealthResponse(BaseModel):
     status: str  # "healthy" or "degraded"
     services: list[ServiceStatus] = Field(default_factory=list)
     counts: dict = Field(default_factory=dict)
+    report: Optional[dict] = None  # ADD THIS — full HealthMonitor report for the dashboard
 
 
 # ------------------------------------------------------------------ #

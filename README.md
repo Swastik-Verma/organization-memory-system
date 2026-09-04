@@ -849,3 +849,43 @@ URL-encoded in all API paths.
 **Quota note:** The `/api/chat` endpoint calls Gemini (currently `gemini-3.1-flash-lite`)
 on every request. All other endpoints (entities, graph, evidence, health) only query
 Neo4j/Qdrant and do not consume LLM quota.
+
+
+
+
+
+### Health Dashboard (`/health`)
+System monitoring page showing knowledge graph quality at a glance. Six summary
+cards (emails processed, total entities, total claims, quality score, average
+confidence, evidence verification rate), a confidence distribution histogram
+and claims-by-type horizontal bar chart (Recharts), live service status for
+Neo4j and Qdrant with real error messages on failure, pending review and
+conflict pair counts linked to their respective pages, claims-by-status
+breakdown, and a top-10 most-mentioned entities table. Graceful degradation:
+if the full health report fails but basic connectivity succeeds, every
+report-dependent card shows a clear "metrics unavailable" message instead of
+crashing or displaying zeros. Manual refresh button — no auto-polling, since
+the corpus is frozen and metrics don't change between requests.
+
+**Backend change (Day 42):** `/api/health` expanded to return a nested `report`
+field containing the full output of `HealthMonitor.full_health_report()` (Day 27
+module), wrapped in its own try/except so a report failure doesn't flip overall
+service status to degraded. The original flat `status`/`services`/`counts` fields
+are preserved unchanged for backward compatibility.
+
+**Documented simplifications:**
+- "Extraction success rate trend over time" (from the original plan) was not built.
+  The corpus is frozen with no incremental ingestion, so no historical data points
+  exist to chart — the current rate is shown as a single metric instead. In
+  production, each health report would be timestamped and stored, enabling a real
+  trend line. This is an honest scope reduction, not a missing feature — noted as
+  an interview talking point.
+- `HealthMonitor`'s optional `pipeline_status` (file freshness checks for raw
+  `.jsonl` files on disk) was deliberately left disabled — `HealthMonitor(driver)`
+  is called with no `data_dir` argument. No dashboard component consumes pipeline
+  file status, and the correct path (`PROJECT_ROOT / "data" / "processed"`) is
+  confirmed — enabling it later is a one-line change.
+- `counts` (original Day 32 lightweight check) and `report.graph_size` (from
+  HealthMonitor) report overlapping node/edge numbers in two different shapes.
+  This is intentional: `counts` proves connectivity even if the fuller report
+  fails, and both are kept for graceful degradation.

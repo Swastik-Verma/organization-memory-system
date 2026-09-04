@@ -11,7 +11,7 @@ monitoring and debugging.
 import logging
 
 from fastapi import APIRouter, Depends
-
+from src.graph.health_monitor import HealthMonitor
 from src.api.dependencies import get_neo4j_driver, get_qdrant_index
 from src.api.models import HealthResponse, ServiceStatus
 from src.retrieval.qdrant_index import QdrantIndex
@@ -93,8 +93,20 @@ async def health_check(
         ))
         overall_healthy = False
 
+    # Full metrics report for the dashboard (Day 42)
+    report = None
+    try:
+        monitor = HealthMonitor(driver)
+        report = monitor.full_health_report()
+    except Exception as e:
+        logger.error("Health monitor full report failed: %s", e)
+        # Don't flip overall_healthy to False here — connectivity is already
+        # verified above; this is richer detail, not a core health check.
+
+
     return HealthResponse(
         status="healthy" if overall_healthy else "degraded",
         services=services,
         counts=counts,
+        report=report,
     )
