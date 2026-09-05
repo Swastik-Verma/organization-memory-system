@@ -130,6 +130,53 @@ literally appeared in that specific source email. Unverified, non-trivial, and o
 partially applicable (relationship claims whose evidence uses pronouns wouldn't
 resolve). Would need its own investigation before committing to build.
 
+
+and this is another more accurate approach of section 1.9 is (that may work):
+
+Undo restores entity identity (names, aliases, emails, mention counts) but does
+NOT reassign claims — they keep whatever `subject_id`/`object_id` they were given
+during Week 3 claim dedup. This is a direct consequence of pipeline ordering:
+claim dedup (Day 18) runs *after* entity resolution (Days 16-17) and *consumes
+its output* — each raw extracted claim's subject/object name gets looked up in
+`resolution_map.json` and rewritten to the final canonical ID at that point. Once
+that happens, the claim only remembers "which final entity," not "which raw name
+variant, from which pre-merge identity, produced it." That distinction is what
+undo would need in order to split claims back apart, and it's discarded at dedup
+time, not something the undo step failed to preserve.
+
+**A more promising recovery approach than pure evidence-quote scanning:** if
+`extractions_final.jsonl` (Day 5's raw extraction output, which Day 18 claim dedup
+takes as input) still exists on disk and retains the pre-resolution subject/object
+name string as a separate field from the final resolved claim, reassignment could
+work structurally rather than by fuzzy-matching free text:
+
+1. For each claim currently pointing at the merged entity, trace it back to its
+   specific raw extraction record (requires a stable claim_id or similar linking
+   the two).
+2. Read the raw name that was actually extracted for that claim, before
+   resolution mapping was applied (e.g. "Rick Causey" vs "Richard Causey").
+3. Check which pre-merge snapshot's alias list (`source_snapshot.aliases` vs
+   `target_snapshot.aliases`, both already captured for undoable Day 17 merges)
+   contains that exact raw string.
+4. Reassign the claim's `subject_id`/`object_id` to whichever pre-merge entity's
+   aliases matched.
+
+This is meaningfully more reliable than scanning evidence quote text, because it
+operates on structured extraction data (a clean raw-name field) rather than
+free-text pattern matching inside email bodies, which is fragile and prone to
+false matches (e.g. pronouns, indirect references).
+
+**Not yet verified — would need to confirm before committing to build:**
+- Whether `extractions_final.jsonl` is retained on disk post-pipeline (not deleted
+  after Day 18 consumed it)
+- Whether each record in it has a stable ID that traces a *final* resolved claim
+  back to its *specific* raw extraction record
+- Whether the raw pre-resolution subject/object name is preserved as its own
+  field, rather than being overwritten in place during resolution
+
+If confirmed, this upgrades from a speculative idea to a genuinely buildable
+feature — worth a dedicated investigation before scoping the actual build.
+
 #### 1.10 Fuzzy blocking misses cross-block pairs
 Strategy 4 (general fuzzy) blocks candidates by last-name token, so entities whose
 canonical names end in different words are never compared — e.g. "John Klauberg" vs
@@ -334,6 +381,21 @@ async precomputation would be the right shape.
 JSON files on disk to record status changes. Fine for a single-user portfolio project; in
 production this state belongs in the database, with the file kept as an immutable pipeline
 artifact.
+
+
+### 6.6 Health report queries run sequentially, not in parallel
+`HealthMonitor.full_health_report()` (Day 27 code, called from `/api/health`)
+runs ~15 separate Cypher aggregation queries one after another inside a single
+session, which is what causes the 8–13 second Health dashboard load — not
+computational cost per query, but the accumulated round-trip time of running
+them in sequence. Deliberately deferred from Day 42 to avoid restructuring
+already-verified monitoring code mid-build.
+
+A fix would need either Neo4j's async driver (`AsyncGraphDatabase`) or a thread
+pool running multiple synchronous sessions concurrently — a genuine architectural
+change to how the backend talks to Neo4j for this one method, not a small tweak.
+Should be done with before/after timing proof if built, same rigor as the Day 43
+merge-search `memo()` fix.
 
 ---
 

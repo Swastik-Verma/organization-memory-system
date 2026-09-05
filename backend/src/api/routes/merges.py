@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.dependencies import get_neo4j_driver
-from src.api.models import MergeItem, MergeListResponse, MergeUndoResponse
+from src.api.models import MergeItem, MergeListResponse, MergeUndoResponse, MergeDetailResponse
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,43 @@ async def list_merges(
         exact_count=len([m for m in all_merges if m.phase == "exact"]),
         fuzzy_count=len([m for m in all_merges if m.phase == "fuzzy"]),
     )
+
+
+@router.get("/merges/{merge_id}", response_model=MergeDetailResponse)
+async def get_merge_detail(merge_id: str):
+    """
+    Get full details for a single fuzzy merge, including both entity snapshots.
+
+    Only works for Day 17 fuzzy merges (which have merge_ids and snapshots).
+    Day 16 exact merges have no merge_id and no snapshots — they are not
+    accessible through this endpoint.
+    """
+    path = DATA_DIR / "entity_resolution_fuzzy.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Fuzzy resolution file not found")
+
+    data = json.loads(path.read_text())
+    operations = data.get("merge_operations", [])
+
+    for op in operations:
+        if op["merge_id"] == merge_id:
+            return MergeDetailResponse(
+                merge_id=op["merge_id"],
+                source_name=op["source_snapshot"]["canonical_name"],
+                target_name=op["target_snapshot"]["canonical_name"],
+                source_id=op["source_id"],
+                target_id=op["target_id"],
+                strategy=op["strategy"],
+                confidence=op["confidence"],
+                timestamp=op["timestamp"],
+                status=op.get("status", "active"),
+                source_snapshot=op["source_snapshot"],
+                target_snapshot=op["target_snapshot"],
+            )
+
+    raise HTTPException(status_code=404, detail=f"Merge operation {merge_id} not found")
+
+
 
 
 @router.post("/merges/{merge_id}/undo", response_model=MergeUndoResponse)

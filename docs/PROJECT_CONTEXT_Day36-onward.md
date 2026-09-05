@@ -2402,3 +2402,138 @@ by this session):
 available to click-test in-page (standing gap since Day 36) — verified by reusing the
 already-tested `CardShell` link code path plus live API confirmation of the field values.
 
+---
+
+## Day 46 — Performance and Polish (Merge Audit Log)
+
+### What was built
+
+Two focused improvements to the `/merges` page from Day 43, against the real backend (the
+`GET /api/merges/{merge_id}` route and its `MergeDetailResponse` model were already built by
+hand before this session — confirmed via the diff and a live curl, not modified here).
+
+**Item 1 — expandable detail panel for fuzzy merges:**
+- `src/types/merge.ts` — added `MergeSnapshot` and `MergeDetailResponse`, mirroring the
+  confirmed backend shape.
+- `src/lib/api.ts` — added `fetchMergeDetail(mergeId)`, called only on row expand.
+- `src/components/merges/MergeDetailPanel.tsx` (new) — side-by-side `Card` comparison of the
+  source (absorbed) and target (survived) entity snapshots: name, aliases, emails, mention
+  count, type. Handles loading (spinner), error (inline message), and success states.
+
+**Item 2 — row virtualization:**
+- Installed `@tanstack/react-virtual`, chosen over `react-window` specifically because it
+  supports measuring actual DOM element height via a ref callback (`measureElement`) —
+  needed since an expanded fuzzy row's height is variable and not knowable up front;
+  `react-window`'s variable-size list requires precomputed sizes instead.
+- `src/components/merges/MergeTable.tsx` — rewritten from a real `<table>`/`<tr>`/`<td>` to a
+  CSS-grid-based row layout (`role="table"`/`role="row"`/`role="cell"`/`role="columnheader"`
+  restore the semantics a real table would otherwise give for free). **Real table rows can't
+  be virtualized with absolute positioning** — browsers ignore `position` on `<tr>` since row
+  layout is computed by the table algorithm, not the box model — which is why this had to
+  stop being a `<table>` at all, not just gain a wrapper. The scroll container is capped at
+  `calc(100vh - 250px)`; the header renders once above it (not inside), so it never scrolls.
+  Each row got a leading expand-chevron column (visible and clickable only when
+  `merge.phase === 'fuzzy' && merge.merge_id`) and, when expanded, a `MergeDetailPanel` below
+  it inside the same virtualized item (so height is re-measured to fit).
+- Expand state (`expandedIds: Set`) and the fetched-detail cache (`details: Map`) live inside
+  `MergeTable` itself, not lifted to `MergesPage` — this was a deliberate choice, not an
+  oversight: lifting them would re-render `MergesPage` (and therefore reconcile the whole
+  table again) on every expand/collapse, reopening the exact per-keystroke-render cost the
+  Day 43 `memo()` fix exists to prevent. Since `MergeTable` never unmounts while the page is
+  open, this state also survives virtualization recycling which rows are actually in the DOM.
+  Re-collapsing and re-expanding a row reuses the cache — confirmed the fetch fires exactly
+  once across expand → collapse → re-expand.
+
+### Real gap found and worked around: jsdom + a virtualization library
+
+No real browser is available in this environment (standing gap since Day 36 —
+Playwright needs `libnspr4`/`libnss3`, no `sudo`). Every prior day's UI was either plain DOM
+(verifiable via jsdom) or, for `react-force-graph-2d` (Day 38), needed a real `<canvas>`
+context jsdom can't provide at all, so that day fell back to testing the underlying physics
+library headlessly. `@tanstack/react-virtual` turned out to be a third category: it renders
+as plain DOM (jsdom can display it), but it decides *what* to render by reading real layout
+geometry (`element.offsetHeight`) that jsdom always reports as `0`, having no layout engine.
+
+The first attempt at a jsdom harness stubbed `getBoundingClientRect()` and a fake
+`ResizeObserver`, and got wildly inconsistent results — some renders showed a plausible
+handful of rows, others showed zero, without an obvious pattern. Tracing it down to the
+actual bug (rather than assuming "flaky test, add a retry") mattered here: reading
+`@tanstack/virtual-core`'s source directly (`node_modules/@tanstack/virtual-core/dist/esm/
+index.js`) showed its default measurement function reads `element.offsetWidth`/`offsetHeight`
+— never `getBoundingClientRect()`, which is what the first stub patched. `offsetHeight` is a
+plain, unstubbed jsdom property that is always `0`, so the viewport and every row measured as
+zero-height on **every** render, 100% reproducibly, once traced to the property actually
+being read — the apparent "sometimes it works" in earlier attempts was leftover DOM from a
+prior test in the same file (no `afterEach(cleanup())` yet) satisfying a query by accident,
+not the component under test actually working. Once `offsetHeight`/`offsetWidth` were stubbed
+(52px rows, in a `vitest` `setupFiles` script — needed there rather than inline in the test
+file, since ES imports are hoisted above other top-level code and the test file's own import
+of `MergeTable` would otherwise evaluate `@tanstack/react-virtual` before a same-file stub
+had a chance to run), the real library, with real geometry, produced a real, repeatable
+answer: **3,315 rows → 9 rendered `<tr>`-equivalent rows**, across multiple runs.
+
+Verification approach (all ephemeral — vitest/jsdom/testing-library installed with
+`--no-save`, `package.json`/`package-lock.json` md5s confirmed byte-identical before and
+after, all test/setup files deleted at the end):
+1. A dedicated benchmark test mounted the **actual, last-committed pre-virtualization**
+   `MergeTable` (pulled via `git show HEAD:...`, not a hand-written approximation) and the new
+   virtualized one side by side, in the same jsdom process, wrapped in a React `Profiler`
+   accumulating `actualDuration` across every commit (not just the first, since the
+   virtualizer's real geometry settles a tick after the initial one). Four runs:
+
+   | | rows rendered | mount duration (jsdom, Profiler `actualDuration`) |
+   |---|---|---|
+   | before (full `<table>`, Day 43 shape) | 3,315 | 1,792–2,132 ms |
+   | after (virtualized) | **9** | **52–72 ms** |
+
+   That's real DOM node count and real render-cost numbers on this machine, not an estimate —
+   roughly a **30–40× reduction** in initial mount cost, consistent with the Day 43 log's
+   independent measurement that a full 3,315-row render cost ~1,869–2,816 ms in this same
+   jsdom environment.
+2. Application-logic behavior (expand chevron only on fuzzy rows; lazy fetch fires once and
+   is reused on collapse/re-expand; Undo still fires; exact rows have no expand affordance at
+   all, even when clicked) was verified in a **separate** test file that mocks
+   `useVirtualizer` to return a fixed set of virtual items — deliberately sidestepping the
+   geometry problem above entirely, so these checks exercise `MergeTable`'s own code, not the
+   library's. All passed.
+
+`tsc -b`, `npm run build`, and `oxlint` all clean on the real (non-ephemeral) code. `oxlint`
+gained exactly one new warning, `react(incompatible-library)` on the `useVirtualizer` call —
+this is a React-Compiler-aware lint noting that the hook returns functions (like
+`measureElement`) that can't be safely memoized, the same category of "third-party library
+isn't React-Compiler-friendly" note Day 38 accepted for `react-force-graph-2d`. Not addressed
+for the same reason: it's accurate, harmless (this component doesn't rely on React Compiler
+memoization), and contorting the code around it would only obscure the virtualizer usage.
+
+### Not done / deferred
+
+- An actual pixel/visual/scroll-feel check in a real browser — the standing gap since Day 36,
+  and the first day where it applies to something (a layout-geometry-dependent library) that
+  jsdom cannot approximate as directly as prior days' plain-DOM UI. The numbers above are real
+  measurements of the real code, just not a substitute for feeling the scroll in a browser.
+- Multi-row expand was allowed (a `Set`, not a single `string | null`) rather than
+  auto-collapsing other rows on expand — the brief didn't specify either way, and comparing
+  two or more fuzzy merges side by side seemed like the more useful audit behavior. Flagging
+  the choice here in case a single-expanded-row-at-a-time behavior is actually preferred.
+
+### Suggested commit message
+
+```
+Day 46: expandable snapshot comparison panel for fuzzy merges (new
+GET /api/merges/{merge_id} integration) and row virtualization for the
+3,315-row merge audit table via @tanstack/react-virtual
+
+Rewrite MergeTable from a real <table> to a CSS-grid row layout with ARIA
+table roles — virtualization needs to absolutely-position rows, which
+native <tr> elements ignore. Expand state and the fetched-detail cache
+live inside MergeTable (not MergesPage) so expanding a row never
+re-renders the page and reopens the Day 43 search-lag risk.
+
+Verified against the real backend endpoint and, for the virtualization
+claim, against the actual last-committed pre-virtualization MergeTable in
+the same jsdom harness: 3,315 rendered rows -> 9, initial mount duration
+1,792-2,132ms -> 52-72ms. Root-caused an earlier flaky jsdom result to
+@tanstack/virtual-core reading element.offsetHeight (always 0 in jsdom)
+rather than getBoundingClientRect(), not to test flakiness.
+```
+

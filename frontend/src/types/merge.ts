@@ -37,3 +37,31 @@ export interface MergeUndoResponse {
   message: string
   merge_id: string
 }
+
+// GET /api/merges/{merge_id} (Day 46) — full detail with both pre-merge entity snapshots.
+// Only reachable for fuzzy merges (they have merge_ids and snapshots); a Day 16 exact
+// merge id 404s here, matching the backend route's own restriction.
+
+export interface MergeSnapshot {
+  canonical_id: string
+  canonical_name: string
+  entity_type: string
+  aliases: string[]
+  emails: string[]
+  mention_count: number
+  org_type: string | null
+}
+
+export interface MergeDetailResponse {
+  merge_id: string
+  source_name: string
+  target_name: string
+  source_id: string
+  target_id: string
+  strategy: string
+  confidence: number
+  timestamp: string
+  status: 'active' | 'undone'
+  source_snapshot: MergeSnapshot
+  target_snapshot: MergeSnapshot
+}

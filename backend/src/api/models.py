@@ -429,3 +429,18 @@ class GlobalSearchResponse(BaseModel):
     query: str
     groups: list[SearchResultGroup] = Field(default_factory=list)
     total_results: int = 0
+
+
+class MergeDetailResponse(BaseModel):
+    """Response for GET /api/merges/{merge_id} — full merge with snapshots."""
+    merge_id: str
+    source_name: str
+    target_name: str
+    source_id: str
+    target_id: str
+    strategy: str
+    confidence: float
+    timestamp: str
+    status: str
+    source_snapshot: dict          # full pre-merge entity state
+    target_snapshot: dict          # full pre-merge entity state

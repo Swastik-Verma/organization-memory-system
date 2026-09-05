@@ -1907,3 +1907,27 @@ silently. Fixed by adding email_date comparisons to the Evidence WHERE
 clause.
 
 **No schema changes.** No new indexes, node types, or relationships.
+
+
+
+## Day 46 — Performance and Polish (Merge Audit Log)
+
+**New API endpoint:**
+
+  GET /api/merges/{merge_id}  — returns full merge detail for a single Day 17
+  fuzzy merge, including complete source_snapshot and target_snapshot (aliases,
+  emails, mention_count, entity_type, org_type). Only available for fuzzy
+  merges (which have merge_ids and stored snapshots). Day 16 exact merges
+  have no merge_id and no snapshots — not accessible through this endpoint.
+
+**New response model:** MergeDetailResponse (merge metadata + both snapshots).
+
+**Frontend performance improvement:** merge table switched from full DOM
+rendering (3,315 <tr> elements on mount) to row virtualization — only the
+~20-30 rows visible in the viewport are rendered at any time, with rows
+swapped in/out during scrolling. Eliminates the ~390ms full-table re-render
+cost on search-clear transitions. Virtualization chosen over pagination
+because the merge audit log is a scan-and-browse tool (continuous scrolling
+fits better than page-by-page navigation).
+
+**No schema changes.** No new indexes, node types, or relationships.

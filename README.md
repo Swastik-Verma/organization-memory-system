@@ -1003,3 +1003,30 @@ exhaustive browsing.
 CONTAINS queries per node type, no full-text index needed at current
 corpus scale. Evidence date-range filtering was initially missing and
 fixed during this day.
+
+
+
+
+### Merge Audit Log — Performance and Polish (Day 46)
+
+**Expandable detail panel:** fuzzy merge rows now expand on click to show
+both entities' full pre-merge snapshots side-by-side — aliases, emails,
+mention counts, and entity type — so a reviewer can make an informed undo
+decision based on real data rather than just two canonical names and a
+confidence number. Detail is fetched lazily (only when expanded, not for
+all 1,291 fuzzy rows upfront) and cached in component state so
+re-expanding doesn't re-fetch. Exact merge rows have no expand button
+since they carry no snapshots (deterministic, re-runnable).
+
+**Row virtualization:** the 3,315-row merge table switched from full DOM
+rendering to virtualized scrolling — only the ~20-30 rows visible on screen
+are rendered at any time, with rows swapped in and out as the user scrolls.
+The table header stays fixed while the body scrolls. All existing
+functionality (sorting, filtering, search, undo buttons, expandable panels)
+works unchanged. Virtualization was chosen over pagination because the merge
+log is primarily a scan-and-browse tool where continuous scrolling fits
+better than page-by-page navigation.
+
+**Backend:** new `GET /api/merges/{merge_id}` endpoint returns a single
+fuzzy merge's full detail including both entity snapshots, read from the
+Day 17 resolution JSON file on disk.

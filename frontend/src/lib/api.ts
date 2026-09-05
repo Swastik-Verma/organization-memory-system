@@ -29,7 +29,7 @@ import type {
   ReviewQueueResponse,
 } from '@/types/health'
 import type { GlobalSearchResponse } from '@/types/search'
-import type { MergeListResponse, MergeUndoResponse } from '@/types/merge'
+import type { MergeDetailResponse, MergeListResponse, MergeUndoResponse } from '@/types/merge'
 import type {
   ConflictGroupListResponse,
   ConflictResolutionListResponse,
@@ -404,6 +404,15 @@ export function fetchMerges(
       strategy: params.strategy,
     },
   })
+}
+
+/** Fuzzy merges only — a Day 16 exact merge has no merge_id to pass in here, and the route
+ *  404s on one anyway. Called lazily (on row expand), never upfront for all 1,291 rows. */
+export function fetchMergeDetail(
+  mergeId: string,
+  options: RequestOptions = {},
+): Promise<MergeDetailResponse> {
+  return fetchApi<MergeDetailResponse>(`/api/merges/${encodeURIComponent(mergeId)}`, options)
 }
 
 export function undoMerge(
