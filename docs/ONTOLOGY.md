@@ -1931,3 +1931,52 @@ because the merge audit log is a scan-and-browse tool (continuous scrolling
 fits better than page-by-page navigation).
 
 **No schema changes.** No new indexes, node types, or relationships.
+
+
+
+## Day 47 — Full Containerization
+
+No new API endpoints, data models, or graph schema changes.
+
+**Infrastructure added:**
+
+  Dockerfile.backend   — Python 3.12-slim base, installs requirements.txt
+                         (including torch CPU + sentence-transformers),
+                         copies backend/ code, runs uvicorn directly.
+                         PyTorch CPU wheels require --extra-index-url from
+                         download.pytorch.org/whl/cpu (not on standard PyPI).
+
+  frontend/Dockerfile  — Multi-stage build: Node 20 alpine builds the React
+                         app (npm ci + npm run build), then copies the dist/
+                         output into an nginx:alpine image for serving. Custom
+                         nginx config with try_files for SPA client-side routing
+                         (without it, refreshing on /entities/xyz returns 404).
+
+  docker-compose.yml   — Four services with dependency ordering:
+                         neo4j (healthy) → qdrant (healthy) → backend (healthy) → frontend.
+                         Health checks: wget for Neo4j (curl not in image),
+                         bash TCP check for Qdrant (neither curl nor wget in image),
+                         curl for backend (installed explicitly in Dockerfile).
+
+  .dockerignore        — Excludes venv/, node_modules/, dist/, data/, .git/,
+                         .env from build context.
+
+**Environment management:** all secrets and config read from .env via
+Docker Compose's automatic .env file loading. NEO4J_PASSWORD, GEMINI_API_KEY,
+GEMINI_MODEL, GEMINI_CHAT_MODEL are passed as environment variables to
+containers — never hardcoded in compose or Dockerfiles. Inside Docker's
+network, services connect by service name (bolt://neo4j:7687,
+http://qdrant:6333) instead of localhost, overriding the backend's default
+localhost values via environment variables.
+
+**Memory limits (sized for 8GB host):**
+  Neo4j: 1GB (heap 512MB, page cache 256MB)
+  Qdrant: 512MB
+  Backend: 2GB (torch + sentence-transformers + embedding model + FastAPI)
+  Frontend: 128MB (static nginx server)
+  Total: ~3.6GB container overhead + ~2-3GB Windows/WSL = fits in 8GB
+
+**Dual-mode operation:** `docker compose up -d` runs everything;
+`docker compose up -d neo4j qdrant` runs only databases for the normal
+dev workflow (local venv + npm dev server). Both modes coexist without
+conflict.

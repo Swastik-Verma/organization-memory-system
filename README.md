@@ -1030,3 +1030,33 @@ better than page-by-page navigation.
 **Backend:** new `GET /api/merges/{merge_id}` endpoint returns a single
 fuzzy merge's full detail including both entity snapshots, read from the
 Day 17 resolution JSON file on disk.
+
+
+
+### Full Containerization (Day 47)
+The entire system runs from a single command: `docker compose up -d` starts
+Neo4j, Qdrant, the FastAPI backend (with sentence-transformers and the
+embedding model), and the React frontend (served via nginx) with correct
+startup ordering — databases must be healthy before the backend starts, and
+the backend must be healthy before the frontend starts. Health checks on
+all four services use tools verified to exist in each container image
+(wget for Neo4j, bash TCP for Qdrant, curl for backend).
+
+All secrets (database password, Gemini API key) are read from `.env` via
+Docker Compose's automatic environment file loading — never hardcoded in
+infrastructure config. Inside Docker's network, services connect by service
+name (`bolt://neo4j:7687`, `http://qdrant:6333`) rather than localhost.
+
+Memory limits are sized for an 8GB host machine: Neo4j 1GB, Qdrant 512MB,
+backend 2GB (dominated by PyTorch CPU + the loaded embedding model),
+frontend 128MB. Total container overhead ~3.6GB.
+
+The frontend Dockerfile uses a multi-stage build (Node for building, nginx
+for serving) with a custom `try_files` config for SPA client-side routing.
+The backend Dockerfile uses `--extra-index-url` for PyTorch's CPU-only
+wheels, which are hosted on PyTorch's own package index rather than
+standard PyPI.
+
+For development, `docker compose up -d neo4j qdrant` starts only the
+databases, allowing the normal local workflow (Python venv + npm dev server)
+to continue unchanged alongside the full-Docker option.
