@@ -1,7 +1,8 @@
-import { AlertTriangle, GitMerge, MessageSquare, Share2, Users, Waves } from 'lucide-react'
+import { AlertTriangle, GitMerge, MessageSquare, Search, Share2, Users, Waves } from 'lucide-react'
 import { NavLink } from '@/components/layout/NavLink'
 
 const navItems = [
+  { to: '/search', icon: Search, label: 'Search' },
   { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/graph', icon: Share2, label: 'Graph Explorer' },
   { to: '/entities', icon: Users, label: 'Entities' },

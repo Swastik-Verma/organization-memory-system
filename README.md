@@ -976,3 +976,30 @@ multiple objects is normal, not a conflict.
 `POST /api/conflict-groups/{id}/resolve`, `GET /api/conflict-resolutions`)
 read conflict data from Week 3 resolution JSON files on disk, enriched with
 live Neo4j queries for per-claim evidence and per-subject aliases.
+
+
+
+### Global Search (`/search`)
+Unified keyword search across all six node types — Person, Organization,
+Claim, Evidence, Deal, Decision — from a single search bar. Results grouped
+by type with matched terms highlighted in yellow. Type filter buttons to
+restrict results to one category. Advanced filters for claim type, date
+range, and minimum confidence (applied selectively: date and confidence
+affect Claims and Evidence only; claim_type affects Claims only; entities
+are unaffected by these filters since those properties don't exist on them).
+
+Person and Organization searches match against aliases as well as canonical
+names (excluding email-address aliases to prevent false positives). Claim
+results are clickable, linking to the subject's entity detail page. Evidence
+results link to the evidence detail page. Deal and Decision results link to
+the graph explorer focused on that node.
+
+Search is debounced (250ms) to avoid per-keystroke fetching. Results are
+capped at 10 per type — this is a search preview, not a paginated results
+page; dedicated pages (Entities, Graph Explorer) remain available for
+exhaustive browsing.
+
+**Backend:** new `GET /api/search` endpoint running sequential Cypher
+CONTAINS queries per node type, no full-text index needed at current
+corpus scale. Evidence date-range filtering was initially missing and
+fixed during this day.

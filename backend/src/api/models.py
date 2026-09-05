@@ -401,4 +401,31 @@ class AutoResolvedListResponse(BaseModel):
     total: int = 0
 
 
-    
+# ------------------------------------------------------------------ #
+# Global Search (Day 45)
+# ------------------------------------------------------------------ #
+
+class SearchResultItem(BaseModel):
+    """One result from global search."""
+    id: str
+    name: str                              # display name / title
+    type: str                              # person, organization, deal, decision, claim, evidence
+    snippet: str = ""                      # matched text (truncated for long fields)
+    mention_count: int = 0                 # 0 for types without mention_count
+    confidence: Optional[float] = None     # claims and evidence only
+    date: Optional[str] = None             # valid_from for claims, email_date for evidence
+    subject_id: Optional[str] = None   # ADD THIS — claims only, links to subject's entity page
+
+class SearchResultGroup(BaseModel):
+    """Results for one node type."""
+    type: str                              # person, organization, etc.
+    label: str                             # "Persons", "Organizations", etc.
+    results: list[SearchResultItem] = Field(default_factory=list)
+    count: int = 0
+
+
+class GlobalSearchResponse(BaseModel):
+    """Response for GET /api/search."""
+    query: str
+    groups: list[SearchResultGroup] = Field(default_factory=list)
+    total_results: int = 0

@@ -2242,3 +2242,163 @@ matches the search query against subject_aliases as well as
 subject_name -- identical logic to filterConflicts, no component
 changes needed since both were already wired through this function.
 ```
+
+---
+
+## Day 45 — Global Search and Filters
+
+### What was built
+
+A unified `/search` page: one search bar across all six node types (Person, Organization,
+Claim, Evidence, Deal, Decision), grouped results, and a filter panel. `GET /api/search` was
+already built by hand before this session (uncommitted `backend/src/api/app.py`/`models.py`
+diffs and a new untracked `backend/src/api/routes/search.py` — not made by this session, same
+recurring pattern as Days 41/44's uncommitted backend work; not touched, per CLAUDE.md §5).
+Verified the real contract two ways before writing any frontend code: read
+`routes/search.py`'s Cypher directly, and ran `curl 'http://localhost:8000/api/search?q=Sally+Beck'`
+against the live server (read-only, no LLM quota — CLAUDE.md §9 doesn't apply to this
+endpoint, so this session built directly against the live backend from the start rather than
+mocking, the same as every read-only endpoint since Day 41).
+
+**New files:**
+- `src/types/search.ts` — `SearchResultItem`/`SearchResultGroup`/`GlobalSearchResponse`,
+  matching `backend/src/api/models.py` field-for-field. One correction to the day brief's
+  example: `mention_count` is not optional (backend model defaults it to `0`, always
+  present); `confidence`/`date` are the only nullable fields.
+- `src/lib/searchTypes.ts` — badge colors/labels for all 6 search result types. Reuses
+  `entityTypes.ts`'s existing Person/Organization/Deal/Decision colors verbatim (so a type
+  reads identically in search, the graph, and entity pages) and adds indigo (Claim) / gray
+  (Evidence), the two this page needed that no earlier day did. Also holds
+  `extractClaimType()` — see gap note below — and the green/amber/red confidence-threshold
+  helpers the brief asked for (`>=0.9` / `>=0.7` / below).
+- `src/lib/highlightMatch.tsx` — wraps the first case-insensitive match of the query in a
+  `<mark>`. Deliberately simple (first match only, no regex escaping needed since it's a
+  plain substring search) — the brief flagged this as a nice-to-have, skip-if-complex
+  feature, and this scope was simple enough to include.
+- `src/components/search/SearchBar.tsx`, `SearchFilterBar.tsx`, `SearchResultCard.tsx`,
+  `SearchResultGroupSection.tsx` — the page's own component tree. `SearchResultCard`
+  branches internally on `item.type` into 4 render variants (Person/Organization share one,
+  Claim, Evidence, Deal/Decision share one) rather than 4 separate files, since all 4 are
+  only ever used from this one page — matching this app's existing judgment call on when a
+  component earns its own file (e.g. `ConflictFilterBar`'s local `SegmentedControl`) instead
+  of splitting for its own sake.
+- `src/pages/SearchPage.tsx` — orchestrator: query + 5 filter fields as state, 250ms
+  debounce (the brief's own number, not Day 39/43's shared 300ms — page-specific, not
+  extracted to a constant), fetch effect keyed on all 6 dependencies, empty/loading/error/
+  no-results/results states.
+- Added the `card` shadcn primitive (`npx shadcn add card`) — first use in this app.
+  **Found and fixed a CLI bug before using it**: the generated `card.tsx` imported `cn` from
+  a brand-new npm package literally named `cn` instead of this project's own
+  `@/lib/utils` (every other shadcn component in the app — `button.tsx`, `badge.tsx`, etc. —
+  imports `cn` from `@/lib/utils`). Fixed the import and ran `npm uninstall cn`;
+  `package.json`/`package-lock.json` are back to exactly their pre-session state (confirmed
+  by md5sum) — Day 45 added no new runtime dependency.
+
+**Sidebar/routing:** `/search` added to `App.tsx`; "Search" added to `Sidebar.tsx` **at the
+top**, above Chat, per the brief (most general entry point).
+
+### Gaps found against the day brief (flagged, not silently worked around)
+
+1. **`SearchResultItem` has no `claim_type`, `subject_id`, or `object_id`.** A claim result's
+   `name`/`snippet` is a pre-rendered description string ("Sally Beck reports_to Richard
+   Causey"), not structured fields. Two consequences, both documented in `types/search.ts`'s
+   header comment:
+   - **Claim cards are not clickable to an entity page.** The brief suggests "extract from
+     the description or use the claim_id" — but there's no id that resolves to a working
+     `/entities/{id}` link without an extra per-card resolving request nothing in the brief
+     asked for, and no `/claims/:id` page exists to link to instead. This session's own
+     verification checklist (item 8) only requires click-through for person/organization and
+     evidence, not claims — so this was treated as the brief's own tacit acknowledgment of
+     the gap, not something to route around with a fragile guess.
+   - **The claim type badge is recovered best-effort**, not read from a field:
+     `extractClaimType()` in `searchTypes.ts` checks the description for one of the 5 closed
+     claim-type tokens as a substring (verified live: every claim description observed
+     follows the literal `"{subject} {claim_type} {object}"` template). Returns `null` (no
+     badge shown) rather than guessing wrong if none match.
+2. **The brief's Deal/Decision link target, `/graph?node={id}`, does not match the real
+   Graph Explorer.** Checked `GraphExplorerPage.tsx` before wiring this link: it reads
+   `?entity=`, not `?node=` (set by Day 41's "View in Graph Explorer" button on the entity
+   detail page). Used the real param — the brief's example would have silently done nothing.
+
+### Verification
+
+No real browser available (standing constraint since Day 36 — Playwright needs
+`libnspr4`/`libnss3`, no `sudo`). Three layers, consistent with every prior day:
+
+1. **Live integration, 15/15 checks passed** — ran `globalSearch()` from `src/lib/api.ts`
+   directly against the running backend (ephemeral `tsx`, removed after; `package.json`/
+   `package-lock.json` md5-confirmed unchanged). Covered: query echo; fixed group ordering;
+   `total_results` equals the sum of group counts; `type=` narrows to one group;
+   `claim_type=` narrows claim results; `min_confidence=` filters correctly; a broad term
+   ("California") returns real cross-type results; a nonsense query returns zero groups; and
+   `limit=` caps every group.
+2. **DOM tests on the real page, 8/8 passed** (ephemeral vitest + jsdom + testing-library +
+   jest-dom, `fetch` stubbed, `package.json`/`package-lock.json` md5-confirmed unchanged
+   afterward) — empty state before any search; typing 10 characters produces exactly 1
+   network request (debounce); grouped results render with correct headings; a person result
+   links to `/entities/{id}` with `target="_blank"`; a claim result renders as plain text,
+   never inside an `<a>`; an evidence result links to `/evidence/{id}` with
+   `target="_blank"`; clicking a type filter button sends `?type=` and hides the now-irrelevant
+   claim-type/date/confidence controls; the empty-results state names the active filters; a
+   network failure shows "Backend unavailable" and Retry recovers into real results; the
+   claim-type dropdown narrows the request; and a Deal result links to
+   `/graph?entity={id}` with no `target` (same-tab, per the brief).
+3. `tsc -b`, `npm run build` (984 kB / 298 kB gzipped — the bundle-size warning is
+   pre-existing from Day 38's `force-graph`, not new today), and `oxlint` all clean — the one
+   new warning (`SearchPage.tsx`'s reset-then-fetch effect) is the same already-accepted
+   `react(set-state-in-effect)` category every other data-fetching page in this app has.
+
+**Not done:** an actual pixel/visual check in a real browser — the standing gap since Day 36.
+
+### Not done / deferred
+
+- Highlighting is single-match only (first occurrence) — acceptable per the brief's own
+  "skip if complex" framing; a full multi-match highlighter was not built.
+- No pagination within a result group — the brief explicitly said not to (10 per type is
+  the ceiling; click through to the dedicated page for more).
+- The existing page-specific search boxes (Entities, Merges, Conflicts) are untouched, as
+  instructed — this is an additional global search, not a replacement.
+
+### Suggested commit message
+
+```
+Day 45: global search page across all 6 node types with grouped
+results and a filter panel
+
+New src/pages/SearchPage.tsx wired to the already-built GET
+/api/search: type/claim_type/date-range/min-confidence filters,
+250ms-debounced search bar, and result cards specialised per type
+(Person/Organization link to the entity page, Evidence to the
+evidence page, Deal/Decision into the Graph Explorer via ?entity=,
+Claim rendered informational-only since the endpoint carries no
+subject/object id to link from). Added the shadcn `card` primitive,
+fixing a CLI-generated import bug (cn from a stray new npm package
+instead of this project's @/lib/utils) before using it.
+
+Search added to the sidebar above Chat, per the brief.
+```
+
+### Follow-up (same day): backend fixed both flagged gaps
+
+After the initial build, two backend fixes landed on `/api/search`
+(`backend/src/api/routes/search.py` + `models.py` — hand-built by the user, not
+by this session):
+
+1. **Evidence date filtering was broken.** `date_from`/`date_to` were being applied to
+   Claim results only; Evidence silently ignored them. Fixed on the backend
+   (`ev_filters` now includes `email_date >= $date_from` / `<= $date_to`). No frontend
+   change needed — re-verified live: a broad "meeting" query with no date filter returned
+   evidence spanning Aug 2000–Apr 2001, while adding `date_from=2001-01-01&date_to=2001-01-31`
+   correctly narrowed every result's date into that window.
+2. **`SearchResultItem` now carries `subject_id`** for claim results (still no `object_id` —
+   object-side linking remains out of scope). Updated `frontend/src/types/search.ts` to add
+   the field, and `ClaimCard` in `SearchResultCard.tsx` now wraps its content in the same
+   `CardShell` link pattern Person/Organization/Evidence already use — `/entities/{subject_id}`
+   in a new tab — falling back to plain (non-clickable) text if `subject_id` is ever null
+   (defensive; not expected to trigger in practice). Verified live: `q=Sally+Beck&type=claim`
+   returns `subject_id: "person:beck-sally:sally-beck-at-enron-com"`, the real entity ID.
+
+`tsc -b` / `npm run build` clean after both changes; no dependency drift. No real browser
+available to click-test in-page (standing gap since Day 36) — verified by reusing the
+already-tested `CardShell` link code path plus live API confirmation of the field values.
+

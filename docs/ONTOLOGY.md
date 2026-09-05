@@ -1861,3 +1861,49 @@ them.
   requires per-date-group resolution logic, tracked in FUTURE_WORK.md §4.4)
 - Per-date-group resolution for multi-date conflicts (FUTURE_WORK.md §4.4)
 - Undo auto-resolution (FUTURE_WORK.md §4.2)
+
+
+
+
+
+## Day 45 — Global Search and Filters
+
+**New API endpoint:**
+
+  GET /api/search — unified keyword search across all six node types
+  (Person, Organization, Claim, Evidence, Deal, Decision). Each type
+  searched independently via UNION-style sequential Cypher queries using
+  toLower(field) CONTAINS toLower(q) pattern (no full-text index —
+  RANGE indexes on canonical_name suffice at current scale of 56k nodes).
+
+  Returns results grouped by type in fixed display order, capped at 10
+  results per type (PER_TYPE_LIMIT). Counts shown per group reflect
+  "how many are shown," not necessarily the true total matches — this
+  is a deliberate simplification for a search preview page.
+
+  Supported filters (applied selectively by type):
+    type         — restrict to one node type
+    claim_type   — Claims only (reports_to, works_with, etc.)
+    date_from    — Claims (valid_from) and Evidence (email_date)
+    date_to      — Claims (valid_from) and Evidence (email_date)
+    min_confidence — Claims and Evidence only
+  Person/Organization/Deal/Decision are unaffected by claim_type,
+  date, or confidence filters (those properties don't exist on them).
+
+  Person and Organization searches include alias matching (any alias
+  CONTAINS query), excluding aliases containing '@' to prevent email
+  addresses from polluting name-based search results.
+
+  Claim results include subject_id for frontend click-through to the
+  subject's entity detail page.
+
+**New response models:** SearchResultItem (with optional subject_id),
+SearchResultGroup, GlobalSearchResponse.
+
+**Bug fixed during Day 45:** evidence date filtering (date_from/date_to)
+was missing entirely from the Evidence query branch — only Claims had
+date filtering applied. Evidence results ignored date range filters
+silently. Fixed by adding email_date comparisons to the Evidence WHERE
+clause.
+
+**No schema changes.** No new indexes, node types, or relationships.

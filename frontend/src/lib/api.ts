@@ -28,6 +28,7 @@ import type {
   HealthResponse,
   ReviewQueueResponse,
 } from '@/types/health'
+import type { GlobalSearchResponse } from '@/types/search'
 import type { MergeListResponse, MergeUndoResponse } from '@/types/merge'
 import type {
   ConflictGroupListResponse,
@@ -453,4 +454,38 @@ export function fetchConflictResolutions(
   options: RequestOptions = {},
 ): Promise<ConflictResolutionListResponse> {
   return fetchApi<ConflictResolutionListResponse>('/api/conflict-resolutions', options)
+}
+
+// ---------------------------------------------------------------------------------------
+// Global search — GET /api/search (Day 45)
+// ---------------------------------------------------------------------------------------
+
+/** Read-only (Neo4j only, no LLM call) — safe to call on every keystroke (debounced) per
+ *  CLAUDE.md §9. `type`/`claim_type`/`date_from`/`date_to`/`min_confidence` are all optional
+ *  and additive; an empty-string value is dropped by buildUrl() so "no filter" is expressed
+ *  by simply not setting the field, matching every other filtered endpoint in this file. */
+export function globalSearch(
+  params: {
+    q: string
+    type?: string
+    claim_type?: string
+    date_from?: string
+    date_to?: string
+    min_confidence?: number
+    limit?: number
+  },
+  options: RequestOptions = {},
+): Promise<GlobalSearchResponse> {
+  return fetchApi<GlobalSearchResponse>('/api/search', {
+    ...options,
+    params: {
+      q: params.q,
+      type: params.type,
+      claim_type: params.claim_type,
+      date_from: params.date_from,
+      date_to: params.date_to,
+      min_confidence: params.min_confidence,
+      limit: params.limit,
+    },
+  })
 }

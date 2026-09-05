@@ -9,6 +9,7 @@ import { GraphExplorerPage } from '@/pages/GraphExplorerPage'
 import { HealthPage } from '@/pages/HealthPage'
 import { MergesPage } from '@/pages/MergesPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { SearchPage } from '@/pages/SearchPage'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
       <Routes>
         <Route element={<MainLayout />}>
           <Route index element={<Navigate to="/chat" replace />} />
+          <Route path="search" element={<SearchPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="graph" element={<GraphExplorerPage />} />
           <Route path="entities" element={<EntitiesPage />} />
