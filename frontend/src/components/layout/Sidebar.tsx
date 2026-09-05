@@ -1,4 +1,4 @@
-import { GitMerge, MessageSquare, Share2, Users, Waves } from 'lucide-react'
+import { AlertTriangle, GitMerge, MessageSquare, Share2, Users, Waves } from 'lucide-react'
 import { NavLink } from '@/components/layout/NavLink'
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/entities', icon: Users, label: 'Entities' },
   { to: '/health', icon: Waves, label: 'Health' },
   { to: '/merges', icon: GitMerge, label: 'Merges' },
+  { to: '/conflicts', icon: AlertTriangle, label: 'Conflicts' },
 ]
 
 export function Sidebar() {

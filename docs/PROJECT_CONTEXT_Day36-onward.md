@@ -1787,3 +1787,458 @@ Extract the filter/sort into src/lib/mergeFilter.ts so tests exercise the
 real function, reusing one Intl.Collator and parsing each timestamp once;
 verified to produce ordering identical to the previous implementation.
 ```
+
+---
+
+## Day 44 — Conflict Review Queue
+
+### What was built
+
+Replaced the `/conflicts` placeholder with a full conflict review queue: one card per grouped
+conflict (2–4 contradicting `reports_to` claims sharing a subject), a claims comparison table
+with shared-date highlighting, and three resolution actions (Keep Best / All Historical /
+Dismiss). Backend routes (`GET /api/conflict-groups`, `POST
+/api/conflict-groups/{conflict_id}/resolve`) and their models were already built by hand
+before this session (uncommitted `backend/src/api/models.py`/`routes/admin.py` diffs) —
+confirmed live via `curl http://localhost:8000/api/conflict-groups`, matching the brief's
+CONFIRMED shape exactly (14 conflicts, all `classification: "direct_contradiction"`, all
+`resolution: "needs_review"`, claim counts per group `[4, 3, 3, 3, 2×10]`). Not modified by
+this session, per CLAUDE.md §5.
+
+**New files:**
+- `src/types/conflict.ts` — `ConflictClaimDetail`/`ConflictGroup`/`ConflictGroupListResponse`/
+  `ConflictResolveRequest`/`ConflictResolveResponse`, mirroring the confirmed backend shape.
+  Kept separate from `src/types/health.ts`'s existing `ConflictItem`/`ConflictListResponse`
+  (Day 42, the older flat `/api/conflicts` endpoint returning individual claim pairs) — the two
+  endpoints return genuinely different shapes and neither was touched by the other.
+- `src/lib/conflictTypes.ts` — classification/resolution badge colors and labels, same
+  lookup-map-plus-fallback pattern as `entityTypes.ts`/`claimTypes.ts`/`mergeTypes.ts`. Includes
+  a `bg-red-100 text-red-700` entry for `direct_contradiction` (a color not used anywhere else
+  in the app) and an `undated` entry the live corpus never actually produces today but the
+  backend model supports.
+- `src/lib/conflictFilter.ts` — three pure functions extracted so a test exercises the real
+  logic, same reasoning as Day 38's `graphForces.ts`/Day 42's `sortedBuckets`/Day 43's
+  `mergeFilter.ts`: `filterConflicts` (status + case-insensitive subject-name search),
+  `sharedDates` (which `valid_from` values are shared by 2+ claims in one group — the core
+  visual contradiction signal a null `valid_from` never counts as shared with another null),
+  and `bestClaim` (highest-`mention_count` claim, the Keep Best dialog's default selection).
+- `src/components/conflicts/ConflictFilterBar.tsx` — status segmented control (All / Needs
+  Review / Resolved / Dismissed) + debounced search input. Same local, unexported
+  `SegmentedControl` shape as `MergeFilterBar.tsx`, kept as its own copy per that file's
+  precedent rather than extracted to a shared component.
+- `src/components/conflicts/ConflictCard.tsx` — one card per conflict group: header (subject
+  name, claim-type/classification/resolution badges, reason text), a claims comparison table
+  (Reports To / Date / Confidence / Mentions), and — only when `resolution === "needs_review"`
+  — the three action buttons.
+- `src/components/conflicts/KeepBestDialog.tsx` — radio-option dialog (plain native
+  `<input type="radio">`s styled with Tailwind's `has-[:checked]` variant, not a new shadcn
+  primitive — no npm dependency needed beyond what Day 36 already installed), defaulting to
+  `bestClaim()`'s pick, re-seeded via an effect whenever a different conflict opens it.
+- `src/components/conflicts/ConfirmResolveDialog.tsx` — shared by "All Historical" and
+  "Dismiss" (both are a single confirm with no extra input, differing only in copy and which
+  action they submit); "Keep Best" needed its own dialog because it collects a winning claim
+  first.
+- `src/pages/ConflictsPage.tsx` (rewritten from the placeholder) — orchestrator: fetches once on
+  mount and again only after a resolution action (`reloadToken`, same pattern as every other
+  page) or Retry, no auto-polling. Debounced client-side status + search filtering via
+  `filterConflicts`. Dismissible success/error banner, identical inline pattern to
+  `MergesPage.tsx`'s (no toast library exists in this app, unchanged from Day 43's decision).
+
+**Small additive edit:** `src/components/layout/Sidebar.tsx` — added "Conflicts" (lucide
+`AlertTriangle` icon) as the 6th nav item, after Merges, per the brief. The Health dashboard's
+"Conflict Pairs" link already pointed at `/conflicts` since Day 42 (added alongside "Pending
+Review" in `AttentionNeededCard.tsx`) — nothing needed there. Added a small note in this page's
+own footer explaining the expected count mismatch (Health's 25 "Conflict Pairs" counts
+individual contradicting claim pairs; this page's 14 groups those pairs by subject +
+relationship type) rather than touching the health page.
+
+**`src/lib/api.ts`:** added `fetchConflictGroups()`/`resolveConflict()`, plus their types
+imported from the new `src/types/conflict.ts`.
+
+### A deliberate deviation from the brief's suggested fallback link
+
+The brief's suggested entity link was `/entities?search=<name>`, "as a fallback if you don't
+have the entity ID in the right format for a direct link." Checked the confirmed response
+shape first: every claim's `object_id` (e.g.
+`person:beck-sally:sally-beck-at-enron-com`, `org:office-of-the-chairman`) is already a real
+entity id in the exact format every other route in this app expects. Since `reports_to`'s
+object is always a Person or Organization — both reachable via `GET /api/entities/{id}` per the
+Day 39 gotcha about that route's Person/Organization-only restriction — the "Reports To" cells
+link directly to `/entities/${encodeURIComponent(object_id)}` instead of falling back to a
+name-based search. More precise than the brief's suggested fallback (a name search can hit
+zero or multiple results; a direct id link cannot), and avoids the double round-trip a search
+page would need. Documented here since it's a deviation from what the brief explicitly wrote,
+even though it's a strictly better version of the same intent.
+
+### Verification
+
+No real browser available (same standing Playwright/`libnspr4`/`libnss3` blocker as every prior
+day). Same ephemeral `vitest`+`jsdom`+`@testing-library/react`/`user-event`+`jest-dom` install as
+every prior day (`--no-save`; `package.json`/`package-lock.json` confirmed byte-identical via
+md5sum before and after; all ephemeral files deleted afterward). One test file, **18/18 passed**,
+run against the real components with `fetch` stubbed to the **actual live response** saved via
+`curl` earlier in the session (not a hand-typed fixture) — 14 real conflicts, real ids, real
+dates:
+
+- All 14 cards render with the correct subject headings, subtitle counts
+  ("14 unresolved, 0 resolved"), and per-card badges (claim type, classification, resolution).
+- `sharedDates`/`filterConflicts`/`bestClaim` unit-tested directly against the real fixture data
+  — confirmed the real Brent Price group's two shared-date pairs (`2000-03-21` ×2,
+  `2000-08-16` ×2) are exactly what gets amber-highlighted (4 of 4 cells), that `bestClaim`
+  picks Sally Beck's claim (7 mentions, the group's highest) as the Keep Best default, and that
+  a null `valid_from` never counts as shared with another null.
+- Status filter narrows correctly (filtering to "Resolved" or "Dismissed" currently always
+  empties the list, since every live conflict is still `needs_review` — expected, not a bug).
+- Search is debounced: typing "Brent" leaves all 14 cards rendered until the debounce timer
+  fires, then narrows to 1.
+- "Keep Best" opens with the correct claim pre-selected, and confirming posts
+  `{action: "keep_one", winning_claim_id: "claim:fea48cdd3aec454d"}` to
+  `/api/conflict-groups/conflict%3Ae40c373b716b/resolve` (URL-encoded conflict id verified), then
+  shows the real success-message shape and closes the dialog.
+- "All Historical" and "Dismiss" each open their own confirm dialog with the brief's exact
+  required copy and post the correct action string.
+- A resolved conflict (`resolution: "resolved"`, `current_claim_id` set) hides all three action
+  buttons and shows a "✓ Current" badge on the winning claim's row.
+- "Reports To" links resolve to `/entities/person%3Abeck-sally%3Asally-beck-at-enron-com`
+  (URL-encoded `object_id`) with `target="_blank"` and `rel="noopener noreferrer"`.
+- A network failure renders "Backend unavailable" + Retry, and Retry recovers into the full
+  card list.
+- An unmatched search shows "No conflicts match your filters."
+
+`tsc -b` clean. `npm run build` clean (968 kB / 295 kB gzipped — the >500KB warning is the same
+pre-existing note from Days 38/42/43, not addressed here for the same reason). `oxlint` clean
+apart from the same already-accepted warning categories from every prior day, plus two new
+instances of the already-documented `react(set-state-in-effect)` pattern:
+`ConflictsPage.tsx`'s own reset-then-fetch effect, and `KeepBestDialog.tsx`'s re-seed-selection-
+on-prop-change effect (same shape as `UndoMergeDialog`-adjacent patterns elsewhere).
+
+**Not done:** an actual pixel/visual check in a real browser — the standing gap since Day 36.
+**Also not exercised today:** the "Resolved"/"Dismissed" filter states and the winning-claim
+"✓ Current" badge were only verified against a hand-modified copy of the real fixture (see
+above) — the live corpus has zero resolved/dismissed conflicts today, since the brief
+explicitly says not to actually resolve any conflicts this session.
+
+### Not done / deferred
+
+- Actually resolving any conflict against the live backend — deferred per the brief; every
+  verification call used a stubbed `fetch`. The real `POST` route was never hit.
+- Server-side pagination — not needed at 14 rows.
+- A toast library — inline dismissible banner, same as Day 43.
+- Editing/adding a human note (`ConflictResolveRequest.note`) in the UI — the brief's request
+  body shows an optional `note` field but never asks for UI to set it, so `resolveConflict()`
+  accepts it as an optional parameter but no dialog collects one today.
+
+### Suggested commit message
+
+```
+Day 44: conflict review queue — grouped conflict cards with claims
+comparison table, shared-date highlighting, and Keep Best / All
+Historical / Dismiss resolution actions against the new
+/api/conflict-groups endpoints
+
+Link each "Reports To" claim directly to /entities/{object_id} rather
+than the brief's suggested name-search fallback -- the confirmed
+response shape already carries a real entity id in the format every
+other route expects, since reports_to's object is always a Person or
+Organization (both reachable via GET /api/entities/{id}).
+
+Add sidebar entry (AlertTriangle icon) after Merges. The health
+dashboard's "Conflict Pairs" link already pointed at /conflicts since
+Day 42; add a footer note on this page explaining why its count (14
+grouped conflicts) differs from that one (25 individual claim pairs).
+
+Verify 18/18 against the real live /api/conflict-groups response
+(not a hand-typed fixture) with fetch stubbed: card rendering, shared-
+date highlighting matches the real Brent Price group's two date
+pairs, Keep Best defaults to the real highest-mention_count claim and
+posts the correct claim id, All Historical/Dismiss post the correct
+action, resolved-state badge, direct entity links, debounced search,
+status filtering, and error/retry.
+```
+
+### Post-session addition: subject_aliases + per-claim evidence fields
+
+Same-day follow-up, after the backend response gained three new fields the initial build
+didn't have: `subject_aliases: string[]` on each conflict group, and `evidence_id: string |
+null` + `evidence_count: number` on each claim. Confirmed live via curl before touching any
+code (same standing habit this whole session) — all 14 live claims currently have a non-null
+`evidence_id` with `evidence_count === mention_count`, so the null-evidence and
+evidence-count-vs-mention-count-mismatch cases were exercised with a hand-modified copy of the
+real fixture rather than live data.
+
+**Changes:**
+- `src/types/conflict.ts` — added the three fields to `ConflictGroup`/`ConflictClaimDetail`.
+- `src/lib/conflictFilter.ts` — `filterConflicts` now also matches the search query against any
+  string in `subject_aliases`, not just `subject_name`, so searching e.g. "Jim Steffes" finds
+  the "James Steffes" conflict group.
+- `src/components/conflicts/ConflictCard.tsx`:
+  - The subject name (previously plain bold text in the card header) is now a link to
+    `/entities/{subject_id}`, same styling and new-tab behavior as the existing object-name
+    links — `subject_id` is the same kind of real entity id `object_id` already was.
+  - Each claim's Mentions cell gained a small `FileText` icon-link (`aria-label`/`title="View
+    evidence"`) to `/evidence/{evidence_id}`, shown only when `evidence_id` is non-null, plus a
+    `+N more` note (`evidence_count - 1`) when `evidence_count > 1`.
+
+No other files changed — the resolution actions, filter bar, dialogs, and shared-date
+highlighting are untouched.
+
+**Verification:** same ephemeral vitest+jsdom pattern as every prior day (`--no-save`, fully
+removed after; `package.json`/`package-lock.json` confirmed byte-identical). 7/7 new checks
+passed against the refreshed live fixture: `filterConflicts` matches "Jim Steffes" to the James
+Steffes group and still matches direct subject-name search; the subject name renders as a link
+to the correct URL-encoded `subject_id` with `target="_blank"`; a claim's "View evidence" link
+resolves to the correct URL-encoded `evidence_id`; `evidence_count > 1` shows "+N more" (and
+`evidence_count === 1` shows none); a null `evidence_id` renders no link on that claim's row;
+and typing an alias into the live search box narrows to the one matching card. `tsc -b`,
+`oxlint` (same categories as before, no new ones), and `npm run build` all clean.
+
+### Suggested commit message (follow-up)
+
+```
+Day 44 follow-up: wire subject_aliases and per-claim evidence fields
+into the conflict review queue
+
+Subject name is now a link to /entities/{subject_id}, matching the
+existing object-name link style. Each claim's Mentions cell gains a
+"View evidence" icon-link to /evidence/{evidence_id} (only when
+non-null) and a "+N more" note when evidence_count > 1. Search now
+matches subject_aliases as well as subject_name.
+```
+
+### Discussion: how "one evidence link per claim" is decided, and a real asymmetry between the two pages that show it (not fixed, backlog only)
+
+The user asked, after seeing the Conflicts page's evidence icon + "+N more" note, how the single
+linked evidence record gets chosen out of all the evidence backing a claim — and whether the
+entity profile page's Claims tab does the same thing. Investigated both backend routes (read-only,
+no backend files touched, per CLAUDE.md §5) rather than answering from memory, since an earlier
+session's log entry (Day 41) turned out to be stale.
+
+**Both pages pick "the evidence with the highest `confidence`", but that framing is close to
+meaningless in practice:**
+
+- `backend/src/api/routes/admin.py` (conflict-groups, lines ~186-191):
+  `ORDER BY e.confidence DESC`, takes `evidence_ids[0]` as `evidence_id`, and separately returns
+  `evidence_count` as the TRUE total via `size(evidence_ids)` — not capped.
+- `backend/src/api/routes/entities.py` (entity claims, lines ~317-329): same
+  `ORDER BY e.confidence DESC`, but `LIMIT 5` — fetches up to 5 evidence records per claim.
+  `src/components/entity/ClaimCard.tsx`'s `claim.evidence.find((e) => e.evidence_id)` then
+  takes the first of those 5 as the one it links to; **the other up-to-4 fetched records are
+  discarded** — no "+N more", no count, nothing shown for them today. This is real, unused
+  data already coming back over the wire on every entity page load.
+- **Neither Cypher query has a secondary sort key.** Checked live rather than assumed: all 5
+  evidence records backing one real Sally Beck claim (`claim:db051bf9828fe9f0`) have
+  `confidence: 1.0` — confirmed via `GET /api/evidence/{id}` on each. Confidence in this corpus
+  reads as a flat extraction-time default rather than a computed score, so ties are the norm,
+  not an edge case. With everything tied, `ORDER BY e.confidence DESC` doesn't select anything
+  — the "winner" is whatever order Neo4j's storage/scan happens to return tied rows in, which
+  Cypher does not guarantee to be stable across query-plan changes, Neo4j versions, or re-runs.
+  So "which evidence gets linked" is, for most claims today, effectively incidental rather than
+  a deliberate choice.
+
+**User's decision this session: leave all of this exactly as it is for now.** Nothing below was
+implemented — recorded purely as a backlog list for whenever this area gets revisited (Week 8
+debugging pass is the natural home, per the existing "chatbot needs a dedicated debugging pass"
+backlog item in CLAUDE.md's Deferred Decisions):
+
+1. Neither Cypher query has a real tiebreaker. If ordering is ever meant to mean something (most
+   recent, most specific quote, etc.), both `admin.py`'s and `entities.py`'s `ORDER BY e.confidence
+   DESC` need a second sort key — a one-line change in each, but a backend change (CLAUDE.md §5,
+   the user's call, not this session's).
+2. The entity Claims tab already fetches up to 5 evidence records per claim but only surfaces one
+   — no "+N more" indicator despite having the data. Could get the same treatment
+   `ConflictCard.tsx` has today, purely on the frontend (no backend change needed — the data's
+   already in the response).
+3. The entity page's cap of 5 means its "how many pieces of evidence exist" is unknowable from
+   that response alone once a claim has more than 5 — unlike the Conflicts page, whose
+   `evidence_count` is a true, uncapped DB count. If a "+N more" ever gets added to the entity
+   page (item 2), its count would need a real `evidence_count`-style field from the backend
+   rather than `evidence.length`, or it will silently under-report for any claim backed by more
+   than 5 sources.
+
+### Post-session addition: split Mentions and Evidence into separate columns
+
+Same-day follow-up, requested after seeing the combined column live: the Mentions column was
+showing the mention count, the evidence icon-link, and the "+N more" note all stacked together.
+The user asked for `ConflictCard.tsx`'s claims table to have a dedicated **Evidence** column
+(the icon link + note), separate from **Mentions** (just the number) — and for the note's wording
+to read "+N more evidence sources" instead of the terser "+N more".
+
+**Change, `src/components/conflicts/ConflictCard.tsx` only:**
+- Table header gained a 5th column: Reports To / Date / Confidence / Mentions / Evidence.
+- The Mentions cell is now just `{c.mention_count}` — no icon, no note.
+- The new Evidence cell holds the `FileText` icon-link to `/evidence/{evidence_id}` (unchanged
+  behavior: shown only when `evidence_id` is non-null) plus, when `evidence_count > 1`, "+N more
+  evidence sources" (`evidence_count - 1`, same math as before — just reworded). A claim with a
+  null `evidence_id` now shows a plain "—" in that column instead of an empty cell.
+
+No other files changed — types, filtering, dialogs, and resolution actions are untouched.
+
+**Verification:** same ephemeral vitest+jsdom pattern as every prior change this session
+(`--no-save`, fully removed after; `package.json`/`package-lock.json` confirmed byte-identical).
+5/5 checks passed against the live `/api/conflict-groups` response: header has distinct
+"Mentions" and "Evidence" `columnheader`s; the Mentions cell contains only the plain number with
+no link inside it; the Evidence cell's link resolves to the correct URL-encoded `evidence_id` and
+shows the exact "+N more evidence sources" text for Sally Beck's claim (`evidence_count: 7` →
+"+6 more evidence sources"); a claim with `evidence_count === 1` shows the icon with no "more"
+text; and a null `evidence_id` renders "—" with no link. `tsc -b`, `oxlint` (same categories as
+before, no new ones), and `npm run build` all clean.
+
+### Suggested commit message (follow-up)
+
+```
+Day 44 follow-up: split Mentions and Evidence into separate columns
+on the conflict review queue's claims table
+
+Mentions now shows only the plain count. New Evidence column holds
+the "View evidence" icon-link and, when evidence_count > 1, a
+"+N more evidence sources" note (reworded from "+N more"). A null
+evidence_id now renders "—" instead of an empty cell.
+```
+
+### Post-session addition: Auto-Resolved tab for temporal-succession conflicts
+
+Same-day follow-up: a new read-only backend endpoint, `GET /api/conflict-resolutions`, returns
+13 conflicts the system resolved on its own by ordering claims chronologically (no human review
+needed) — distinct from `/api/conflict-groups`'s 14 `needs_review` conflicts. Confirmed the
+shape live before writing anything, and specifically checked (not assumed) three claims the
+brief made about the data: `claims` arrives already sorted ascending by `valid_from` on all 13
+groups, `current_claim_id` always matches the *last* claim in that sorted array, and
+`superseded_claim_ids` always equals exactly "every other claim's id" — all held with zero
+exceptions across the live corpus.
+
+**New files:**
+- `src/components/conflicts/shared.tsx` — extracted `Pill` and a renamed `formatConflictDate`
+  out of `ConflictCard.tsx` (previously private, unexported helpers there) so the new
+  `AutoResolvedCard.tsx` doesn't duplicate the date parser's timezone-safety logic (parsing
+  "YYYY-MM-DD" as local calendar components rather than `new Date(str)`, which drifts a day
+  under negative UTC offsets). `ConflictCard.tsx` now imports both from here instead of
+  defining its own copies — pure extraction, no behavior change (re-verified with a regression
+  test, see below).
+- `src/components/conflicts/AutoResolvedCard.tsx` — read-only card, no props for action
+  handlers (there is nothing to act on). Header: subject name linked to
+  `/entities/{subject_id}` (same style as the review cards), "Temporal Succession"
+  (teal) + "Auto-Resolved" (green) badges, reason text. Body: a vertical timeline reusing the
+  same `border-l` + dot visual language as `src/components/entity/TimelineTab.tsx` (chosen over
+  a horizontal arrow chain specifically for consistency with that existing pattern, both are
+  literally "sorted claims for one subject over time"), oldest claim at top since the backend
+  already sorts ascending. Each entry: object name linked (dimmed + `line-through` when
+  superseded, full-opacity `text-primary` when current), the date, and a "Superseded"/"Current"
+  pill (green dot + `CheckCircle2` check for current, reusing the exact "✓ Current" pattern
+  `ConflictCard.tsx` already uses for a `keep_one` winner).
+
+**Changed:**
+- `src/types/conflict.ts` — added `ConflictResolutionGroup`/`ConflictResolutionListResponse`.
+  Reuses the existing `ConflictClaimDetail` type as-is (identical per-claim fields on this
+  endpoint). Kept separate from `ConflictGroup` since the two response shapes genuinely differ
+  (no `subject_aliases` here; `superseded_claim_ids` and no `needs_review`/`resolved` counters
+  are unique to this one).
+- `src/lib/conflictTypes.ts` — added `temporal_succession` (teal) to the classification maps and
+  `auto_resolved` (green, same treatment as the existing `resolved`) to the resolution maps.
+- `src/lib/conflictFilter.ts` — added `filterConflictResolutions` (subject_name-only substring
+  search; this endpoint has no aliases and no status to filter by, since every group here is
+  already `auto_resolved`).
+- `src/lib/api.ts` — added `fetchConflictResolutions()`.
+- `src/pages/ConflictsPage.tsx` — restructured around shadcn `Tabs` (same primitive
+  `EntityDetailPage.tsx` already uses), two tabs: "Needs Review ({count})" and "Auto-Resolved
+  ({count})". Both endpoints are fetched **on mount regardless of which tab is active**, since
+  both tab labels need real counts immediately, not just whichever tab happens to be open first.
+  All of the existing Needs Review state (filters, dialogs, banner, `submitResolve`) moved into
+  the `needs_review` `TabsContent` unchanged; the new `auto_resolved` `TabsContent` is
+  self-contained (its own debounced search state, skeleton, error+retry, empty state, footer
+  count) since it needs no dialogs or resolution logic at all.
+
+**Verification:** same ephemeral vitest+jsdom pattern as every change this session (`--no-save`,
+fully removed after; `package.json`/`package-lock.json` confirmed byte-identical). Two test
+files, **11/11 passed**, run against the real components with `fetch` routed by URL to the two
+real live fixtures (`/api/conflict-groups` and `/api/conflict-resolutions`, both curled during
+the session):
+- Both tab labels show the real `total` from their own endpoint's response on load.
+- Needs Review tab is active by default and its existing cards/dialogs still render.
+- Switching tabs shows the Sally Beck auto-resolved card with the correct badges and **no**
+  Keep Best / All Historical / Dismiss buttons.
+- The timeline renders in the real chronological order (Richard Causey → Brent Price → Louise
+  Kitchen), the current claim's link has no strikethrough and the two superseded claims' links
+  do, and the pills read "Current" (×1) / "Superseded" (×2).
+- Searching the Auto-Resolved tab's box narrows to the matching subject.
+- Switching tabs and back preserves the Needs Review tab's own search text — the two tabs' state
+  don't leak into each other.
+- **Regression check**, specifically because `ConflictCard.tsx` was edited to import from the
+  new `shared.tsx`: Keep Best still pre-selects Sally Beck's claim (highest mention_count) and
+  posts the correct `winning_claim_id`; shared-date amber highlighting and the Evidence column's
+  "+6 more evidence sources" text still render exactly as before the extraction.
+
+`tsc -b` clean. `npm run build` clean (973 kB / 296 kB gzipped — the same pre-existing >500KB
+note as every day since Day 38, not addressed here for the same reason). `oxlint` clean apart
+from the same already-accepted categories, plus one new instance of the already-accepted
+`react(only-export-components)` pattern on `shared.tsx` (exporting `formatConflictDate` alongside
+the `Pill` component — same tradeoff as `graphForces.ts`/`sortedBuckets`/`mergeFilter.ts`).
+
+**Not done:** no undo/action for auto-resolved conflicts exists or was asked for — this tab is
+read-only by design, matching the brief exactly. No real browser check — standing gap since
+Day 36.
+
+### Suggested commit message (follow-up)
+
+```
+Day 44 follow-up: add a read-only "Auto-Resolved" tab to the conflict
+review queue for GET /api/conflict-resolutions (13 temporal-succession
+conflicts the system ordered chronologically on its own)
+
+Restructure ConflictsPage around shadcn Tabs: "Needs Review (N)" is
+the existing human review queue unchanged; "Auto-Resolved (M)" is a
+new self-contained, dialog-free tab with its own debounced search.
+Both endpoints fetch on mount so both tab counts are correct
+immediately regardless of which tab is open.
+
+New AutoResolvedCard renders each conflict's claims as a vertical
+timeline (same border-l/dot visual language as the entity profile's
+TimelineTab), oldest first, with superseded claims dimmed and
+struck through and the current claim checkmarked -- no action
+buttons, since there is nothing to resolve here.
+
+Extract Pill and formatConflictDate out of ConflictCard.tsx into a
+new shared.tsx so the new card doesn't duplicate the date parser's
+timezone-safety logic; verified with a regression test that
+ConflictCard's own behavior is unchanged.
+```
+
+### Post-session addition: mirror alias search onto the Auto-Resolved tab
+
+Same-day follow-up: `GET /api/conflict-resolutions` gained `subject_aliases` per conflict —
+identical field to the one `/api/conflict-groups` already had (Day 44's first alias-search
+follow-up). Confirmed live before touching code (`Sally Beck` → `['Sally Beck', 'Sally', 'Sally
+W. Beck']`, etc.) rather than trusting the request's description of the shape.
+
+**Changes, mirroring the existing Needs Review fix exactly:**
+- `src/types/conflict.ts` — added `subject_aliases: string[]` to `ConflictResolutionGroup`
+  (was previously documented in this file's own header comment as *not* present on this
+  endpoint — that comment is now corrected).
+- `src/lib/conflictFilter.ts` — `filterConflictResolutions` now checks the search query against
+  `subject_name` OR any `subject_aliases` entry, same logic as `filterConflicts`.
+
+No component changes needed — `AutoResolvedCard.tsx` and the Auto-Resolved tab's search input in
+`ConflictsPage.tsx` were already wired to call `filterConflictResolutions`, so the new matching
+behavior takes effect automatically.
+
+**Verification:** same ephemeral vitest+jsdom pattern as every change this session (`--no-save`,
+fully removed after; `package.json`/`package-lock.json` confirmed byte-identical). 5/5 checks
+passed against the live `/api/conflict-resolutions` response: `filterConflictResolutions` matches
+"Sheri Thomas" to the "Sheri L Thomas" group (an alias that drops the middle initial) and "Klay"
+to "Kenneth Lay" (one of that group's more distinctive aliases, out of eleven); direct
+subject-name search and a no-match query still behave correctly; and, driven through the actual
+rendered page rather than just the pure function, typing "Klay" into the Auto-Resolved tab's live
+search box narrows the card list to exactly the Kenneth Lay card. `tsc -b`, `oxlint` (same
+categories as before, no new ones), and `npm run build` all clean.
+
+### Suggested commit message (follow-up)
+
+```
+Day 44 follow-up: mirror subject_aliases search onto the Auto-Resolved
+tab, matching the fix already applied to Needs Review
+
+/api/conflict-resolutions gained subject_aliases per conflict, same
+field ConflictGroup already had. filterConflictResolutions now
+matches the search query against subject_aliases as well as
+subject_name -- identical logic to filterConflicts, no component
+changes needed since both were already wired through this function.
+```

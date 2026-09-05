@@ -932,3 +932,47 @@ JSON file.
 table re-rendering (not the filter itself). React.memo() + debounce reduced
 per-keystroke cost from ~60ms to ~2ms. Full re-render on clearing search
 (~390ms) deferred to Day 46 (virtualization).
+
+
+
+### Conflict Review Queue (`/conflicts`)
+Two-tab interface for reviewing and resolving claim conflicts:
+
+**Needs Review tab (14 conflicts):** Grouped conflict cards showing competing
+claims side-by-side — e.g. "Brent Price reports_to: Sally Beck (7 mentions,
+Mar 21, 2000) vs Fearnley Dyson (3 mentions, Mar 21, 2000) vs Richard Causey
+(2 mentions, Aug 16, 2000) vs ENA's Office of the Chairman (1 mention, Aug 16,
+2000)." Shared dates are highlighted in amber to make contradictions visually
+obvious. Each claim shows clickable evidence links with "+N more evidence
+sources" indicators. Three resolution actions per conflict: Keep Best (pick a
+winner, supersede the rest), All Historical (mark all superseded), and Dismiss
+(not a real conflict — all claims stay current). Subject names are clickable
+links to entity profiles, searchable by canonical name or aliases.
+
+**Auto-Resolved tab (13 conflicts):** Read-only audit trail of temporal
+successions the system resolved automatically — claims with different dates
+ordered chronologically without human intervention. Displayed as timeline
+chains showing the progression (e.g. "Sally Beck reported to Richard Causey
+(Jan 2000) → Brent Price (Aug 2000) → Louise Kitchen (Nov 2000, current)").
+Current claims highlighted in green, superseded claims visually dimmed. No
+action buttons — demonstrates the system's temporal reasoning capability.
+
+All 27 conflicts in the corpus are `reports_to` type — the only exclusive
+relationship type. Non-exclusive types (works_with, requests_from, informs,
+negotiating_with) legitimately have multiple objects simultaneously, so
+multiple objects is normal, not a conflict.
+
+**Documented simplifications:**
+- Resolution does not currently set `valid_to` on superseded claims or handle
+  per-date-group resolution for multi-date conflicts — deferred to
+  FUTURE_WORK.md as it requires restructuring resolution logic to operate on
+  date groups within a conflict rather than the conflict as a flat whole.
+- Undo auto-resolution is not built — deferred to FUTURE_WORK.md; complex and
+  low priority since temporal successions are generally correct.
+- 60 flagged decision reversals from the pipeline are not surfaced in any UI
+  — deferred to FUTURE_WORK.md.
+
+**Backend:** three new endpoints (`GET /api/conflict-groups`,
+`POST /api/conflict-groups/{id}/resolve`, `GET /api/conflict-resolutions`)
+read conflict data from Week 3 resolution JSON files on disk, enriched with
+live Neo4j queries for per-claim evidence and per-subject aliases.

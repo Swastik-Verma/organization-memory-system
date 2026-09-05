@@ -29,6 +29,12 @@ import type {
   ReviewQueueResponse,
 } from '@/types/health'
 import type { MergeListResponse, MergeUndoResponse } from '@/types/merge'
+import type {
+  ConflictGroupListResponse,
+  ConflictResolutionListResponse,
+  ConflictResolveAction,
+  ConflictResolveResponse,
+} from '@/types/conflict'
 
 const API_BASE = 'http://localhost:8000'
 const CLEARANCE = '4'
@@ -408,4 +414,43 @@ export function undoMerge(
     {},
     options,
   )
+}
+
+// ---------------------------------------------------------------------------------------
+// Conflict groups — GET /api/conflict-groups, POST /api/conflict-groups/{conflict_id}/resolve
+// (Day 44).
+//
+// Distinct from fetchConflicts()/ConflictListResponse above (Day 42, src/types/health.ts):
+// that older /api/conflicts endpoint returns individual claim pairs and is left untouched
+// per this session's brief (still used by the health dashboard's "Conflict Pairs" count).
+// This endpoint returns claims already grouped by subject + claim_type — what the Conflict
+// Review Queue page renders as one card per group.
+// ---------------------------------------------------------------------------------------
+
+export function fetchConflictGroups(
+  options: RequestOptions = {},
+): Promise<ConflictGroupListResponse> {
+  return fetchApi<ConflictGroupListResponse>('/api/conflict-groups', options)
+}
+
+export function resolveConflict(
+  conflictId: string,
+  action: ConflictResolveAction,
+  winningClaimId?: string,
+  note?: string,
+  options: RequestOptions = {},
+): Promise<ConflictResolveResponse> {
+  return postApi<ConflictResolveResponse>(
+    `/api/conflict-groups/${encodeURIComponent(conflictId)}/resolve`,
+    { action, winning_claim_id: winningClaimId, note },
+    options,
+  )
+}
+
+/** GET /api/conflict-resolutions — read-only audit trail of conflicts the system resolved
+ *  itself via temporal ordering (no human action, no POST counterpart). */
+export function fetchConflictResolutions(
+  options: RequestOptions = {},
+): Promise<ConflictResolutionListResponse> {
+  return fetchApi<ConflictResolutionListResponse>('/api/conflict-resolutions', options)
 }

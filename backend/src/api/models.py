@@ -326,3 +326,79 @@ class MergeUndoResponse(BaseModel):
     success: bool
     message: str
     merge_id: str
+
+# ------------------------------------------------------------------ #
+# Conflict Review (Day 44)
+# ------------------------------------------------------------------ #
+
+class ConflictClaimDetail(BaseModel):
+    """One claim within a conflict group."""
+    claim_id: str
+    object_id: str = ""
+    object_name: str = ""
+    mention_count: int = 0
+    valid_from: Optional[str] = None
+    confidence: float = 0.0
+    evidence_id: Optional[str] = None     # ADD — first/strongest evidence, for a "View Evidence" link
+    evidence_count: int = 0               # ADD — how many evidence items support this claim
+
+
+class ConflictGroup(BaseModel):
+    """A grouped conflict — multiple claims about the same subject."""
+    conflict_id: str
+    claim_type: str = ""
+    subject_id: str = ""
+    subject_name: str = ""
+    subject_aliases: list[str] = Field(default_factory=list)  # ADD — for alias search + link
+    classification: str = ""
+    resolution: str = ""
+    reason: str = ""
+    claims: list[ConflictClaimDetail] = Field(default_factory=list)
+    current_claim_id: Optional[str] = None
+    timestamp: str = ""
+
+class ConflictGroupListResponse(BaseModel):
+    """Response for GET /api/conflict-groups."""
+    conflicts: list[ConflictGroup] = Field(default_factory=list)
+    total: int = 0
+    needs_review: int = 0
+    resolved: int = 0
+
+
+class ConflictResolveRequest(BaseModel):
+    """Request body for POST /api/conflict-groups/{conflict_id}/resolve."""
+    action: str               # "keep_one", "all_historical", "dismiss"
+    winning_claim_id: Optional[str] = None  # required when action is "keep_one"
+    note: Optional[str] = None              # optional human note
+
+
+class ConflictResolveResponse(BaseModel):
+    """Response for POST /api/conflict-groups/{conflict_id}/resolve."""
+    success: bool
+    message: str
+    conflict_id: str
+
+
+class AutoResolvedConflict(BaseModel):
+    """An auto-resolved temporal succession conflict (read-only)."""
+    conflict_id: str
+    claim_type: str = ""
+    subject_id: str = ""
+    subject_name: str = ""
+    subject_aliases: list[str] = Field(default_factory=list)  # ADD THIS
+    classification: str = ""          # always "temporal_succession"
+    resolution: str = ""              # always "auto_resolved"
+    reason: str = ""
+    claims: list[ConflictClaimDetail] = Field(default_factory=list)
+    superseded_claim_ids: list[str] = Field(default_factory=list)
+    current_claim_id: Optional[str] = None
+    timestamp: str = ""
+
+
+class AutoResolvedListResponse(BaseModel):
+    """Response for GET /api/conflict-resolutions."""
+    conflicts: list[AutoResolvedConflict] = Field(default_factory=list)
+    total: int = 0
+
+
+    

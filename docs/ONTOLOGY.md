@@ -1809,3 +1809,55 @@ evidence highlighting status, and missing To: field.
 confidence) was undone during testing and left undone. This is intentional
 — a single undone merge out of 1,291 does not meaningfully affect the
 evaluation baseline.
+
+
+
+
+## Day 44 — Conflict Review Queue
+
+**New API endpoints:**
+
+  GET  /api/conflict-groups                    — 14 grouped conflicts from
+       conflict_review_queue.json, each with 2–4 claims needing human review.
+       Enriched with per-claim evidence (evidence_id, evidence_count from Neo4j)
+       and per-subject aliases (for alias search). All conflicts are reports_to
+       type — the only exclusive relationship type in the ontology.
+  POST /api/conflict-groups/{id}/resolve       — resolve a conflict group.
+       Actions: "keep_one" (pick a winner, supersede the rest, create SUPERSEDES
+       edges), "all_historical" (all claims superseded), "dismiss" (all claims
+       stay current, CONFLICTS_WITH edges removed). Updates both Neo4j and the
+       JSON file.
+  GET  /api/conflict-resolutions               — 13 auto-resolved temporal
+       succession conflicts from conflict_resolutions.json (read-only). Claims
+       sorted chronologically, with superseded/current status already determined
+       by Day 19's automatic ordering logic.
+
+**New response models:** ConflictGroup, ConflictGroupListResponse,
+ConflictClaimDetail (with evidence_id + evidence_count), ConflictResolveRequest,
+ConflictResolveResponse, AutoResolvedConflict, AutoResolvedListResponse.
+
+**Data sources:** conflict data read from two JSON files on disk
+(conflict_review_queue.json for needs-review, conflict_resolutions.json for
+auto-resolved), enriched with live Neo4j queries for evidence and aliases.
+Resolution actions write to both Neo4j (claim status, SUPERSEDES edges,
+CONFLICTS_WITH removal) and the JSON file (resolution status).
+
+**Why conflicts are only reports_to:** Day 18 limited conflict detection to
+EXCLUSIVE_TYPES = {"reports_to"} — non-exclusive types (works_with, requests_from,
+informs, negotiating_with) legitimately have multiple objects simultaneously, so
+multiple objects is normal, not a conflict.
+
+**Why 14 groups = 33 individual claims = 25 pairs:** 14 conflict groups × 2–4
+claims each = 33 individual participating claims. 25 pairs from the health
+monitor = CONFLICTS_WITH edge count / 2 (a 4-claim group has C(4,2) = 6 pairs).
+Three different counts of the same underlying data.
+
+**Existing endpoints preserved:** the original `/api/conflicts` (flat claim list)
+and `/api/review-queue` from Day 32 remain unchanged — other pages may reference
+them.
+
+**Deferred — not built:**
+- valid_to is not set on superseded claims during resolution (the correct fix
+  requires per-date-group resolution logic, tracked in FUTURE_WORK.md §4.4)
+- Per-date-group resolution for multi-date conflicts (FUTURE_WORK.md §4.4)
+- Undo auto-resolution (FUTURE_WORK.md §4.2)
