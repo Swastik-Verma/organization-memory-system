@@ -1980,3 +1980,43 @@ localhost values via environment variables.
 `docker compose up -d neo4j qdrant` runs only databases for the normal
 dev workflow (local venv + npm dev server). Both modes coexist without
 conflict.
+
+
+
+
+## Day 48 — End-to-End Integration Test
+
+No new API endpoints, data models, or graph schema changes.
+
+**Testing:** systematic end-to-end verification of all pages and flows with the
+full system running via `docker compose up -d`. Covered: health dashboard (cards,
+charts, service status, refresh), chat (simple/relationship/temporal/ambiguous/
+no-answer/follow-up/citation click-through), entity list (search, type filter,
+detail page, claims tab, timeline), graph explorer (search, node click, edges),
+merge audit log (filters, search, expandable detail panel, scroll performance,
+Rick Causey disambiguation, Jacob/Jake undone status), conflict review (both tabs,
+evidence links, subject links, alias search, Keep Best dialog), global search
+(multi-type results, all filter combinations, debounce), cross-page consistency
+(entity counts, conflict counts, sidebar, SPA routing on hard refresh), and
+error states (backend-down degradation).
+
+**New issues found during testing:**
+- Merge table column headers drift on narrow viewports (Low — CSS only)
+- Timeline ordering non-deterministic among same-date claims (Low — no tiebreaker)
+- Health dashboard vs Entities page entity count mismatch explained (not a bug —
+  dashboard includes Deals, entity page does not)
+
+**New file:** `KNOWN_ISSUES.md` — consolidated, severity-ranked list of all known
+defects. 0 Critical, 2 High (chatbot unverified, clarification loop), 4 Medium
+(evidence highlighting confirmed broken at ~60% failure rate, Kenneth Lay malformed
+ID 404, citation ordering, evidence tiebreaker arbitrary), 6 Low (merge table
+responsive layout, timeline tie-ordering, N+1 claims query, health dashboard load
+time, entity claims tab discards evidence, bundle size). Plus a "Not Bugs" section
+documenting 15 intentional scope boundaries and count-mismatch explanations.
+
+Sources consolidated: `CLAUDE.md` Deferred Decisions, `FUTURE_WORK.md` (bug-specific
+items only), and new findings from Day 48 testing. Cross-references point back to
+source documents rather than duplicating.
+
+**Updated:** `CLAUDE.md` → Evidence quote highlighting status changed from "may still
+be broken" to "CONFIRMED BROKEN" with specific failure rate and root cause.

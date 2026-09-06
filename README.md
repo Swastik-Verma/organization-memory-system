@@ -1060,3 +1060,29 @@ standard PyPI.
 For development, `docker compose up -d neo4j qdrant` starts only the
 databases, allowing the normal local workflow (Python venv + npm dev server)
 to continue unchanged alongside the full-Docker option.
+
+
+
+
+### End-to-End Integration Testing (Day 48)
+Systematic testing of every page and user flow with the full system running via
+Docker Compose. All four services (Neo4j, Qdrant, FastAPI backend, React frontend)
+exercised together, covering: health dashboard metrics and service status, chat
+with citations across multiple question types, entity browsing and detail pages,
+graph exploration, merge audit log with expandable detail panels and virtualized
+scrolling, conflict review with both interactive and auto-resolved views, global
+search with all filter combinations, cross-page consistency checks, SPA routing
+on hard refresh, and backend-down error states.
+
+**Result:** 0 Critical issues. All core features functional end-to-end through
+Docker. Two High-priority items remain open: the chatbot needs a dedicated
+correctness pass (untested edge cases, not a known failure), and the clarification
+loop bug (known, intermittent). Evidence quote highlighting confirmed broken at
+~60% failure rate on real data (whitespace normalization never implemented).
+
+**`KNOWN_ISSUES.md`** created as a consolidated, severity-ranked reference of all
+known defects — 0 Critical, 2 High, 4 Medium, 6 Low — plus 15 documented "Not
+Bugs" explaining intentional scope boundaries and count mismatches that could be
+mistaken for defects. Sources: `CLAUDE.md` Deferred Decisions, `FUTURE_WORK.md`
+(bug-specific items), and new findings from this day's testing. Each issue
+cross-references its source document rather than duplicating.

@@ -22,7 +22,5 @@ Thumbs.db
 # IDE settings (optional — some people commit VS Code settings, but generally skip)
 .vscode/
 
-CLAUDE.md
-docs/Full_Project_Plan/
 
-docs/PROJECT_CONTEXT_DAY36-onward.md
+docs/Full_Project_Plan/
