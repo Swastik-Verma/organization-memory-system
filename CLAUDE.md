@@ -35,6 +35,10 @@ At the beginning of every session, read these in order:
 3. `docs/Full_Project_Plan/PROJECT_CONTEXT(Layer10)_Day36-41.md` — decisions, design
    rationale, backend changes, and the open backlog from Week 6. Read this for *why*
    things were built the way they were, not just *what* was built.
+  
+4. `docs/Full_Project_Plan/PROJECT_CONTEXT(Layer10)_Day42-48.md` — consolidated Week 7 handoff.
+   Read this before starting Week 8 (Days 49+) — it summarizes everything built,
+   decided, and left open across Days 42-48 in one place.
 
 Read these only when you need deeper background on how the backend works:
 
